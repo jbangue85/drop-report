@@ -238,14 +238,26 @@
         </div>
       </div>
       
-      <div class="chart-card table-wrap" style="max-height: 70vh;">
-        <table class="data-table" id="control-table">
+      <div class="chart-card table-wrap" style="max-height: 70vh; overflow-x: auto;">
+        <table class="data-table" id="control-table" style="table-layout: fixed; width: 100%; min-width: 900px;">
+          <colgroup>
+            <col style="width: 95px;">  <!-- Día -->
+            <col style="width: 180px;"> <!-- Producto -->
+            <col style="width: 70px;">  <!-- Ventas -->
+            <col style="width: 100px;"> <!-- Devoluciones -->
+            <col style="width: 90px;">  <!-- Cancelados -->
+            <col style="width: 120px;"> <!-- Ingresos -->
+            <col style="width: 120px;"> <!-- Margen Bruto -->
+            <col style="width: 110px;"> <!-- Gasto Meta -->
+            <col style="width: 100px;"> <!-- CPA -->
+            <col style="width: 120px;"> <!-- Utilidad Total -->
+            <col style="width: 70px;">  <!-- ROI -->
+          </colgroup>
           <thead>
             <tr>
               <th>Día</th>
               <th>Producto</th>
               <th>Ventas</th>
-              <th>Efectivas</th>
               <th>Devoluciones</th>
               <th>Cancelados</th>
               <th>Ingresos</th>

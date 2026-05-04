@@ -214,21 +214,21 @@ function renderKpis(k) {
 function renderDailyControl(data) {
   const tbody = document.querySelector('#control-table tbody');
   if (!data || data.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="12" class="empty-row">No hay datos en el período</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" class="empty-row">No hay datos en el período</td></tr>';
     return;
   }
   
   const fmt = CHARTS.formatCOP;
-  const fmtPct = (val) => (val * 100).toFixed(1) + '%';
-  
-  tbody.innerHTML = data.map(r => `
+  const fmtPct = (val) => (val != null && isFinite(val) ? (val * 100).toFixed(1) : '0.0') + '%';
+
+  // Build rows (no Efectivas column)
+  const rows = data.map(r => `
     <tr>
       <td>${r.fecha}</td>
-      <td title="${r.producto}" style="max-width:150px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+      <td title="${r.producto}" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
         ${r.producto}
       </td>
       <td>${r.total_pedidos}</td>
-      <td>${r.entregados}</td>
       <td>${r.devoluciones}</td>
       <td>${r.cancelados}</td>
       <td>${fmt(r.ingresos_brutos)}</td>
@@ -241,6 +241,38 @@ function renderDailyControl(data) {
       <td>${fmtPct(r.roi)}</td>
     </tr>
   `).join('');
+
+  // Totals row
+  const tot = data.reduce((acc, r) => {
+    acc.total_pedidos   += r.total_pedidos   || 0;
+    acc.devoluciones    += r.devoluciones    || 0;
+    acc.cancelados      += r.cancelados      || 0;
+    acc.ingresos_brutos += r.ingresos_brutos || 0;
+    acc.margen_bruto    += r.margen_bruto    || 0;
+    acc.ad_spend        += r.ad_spend        || 0;
+    acc.utilidad_total  += r.utilidad_total  || 0;
+    return acc;
+  }, { total_pedidos:0, devoluciones:0, cancelados:0, ingresos_brutos:0, margen_bruto:0, ad_spend:0, utilidad_total:0 });
+
+  const totRoi = tot.ingresos_brutos > 0 ? tot.utilidad_total / tot.ingresos_brutos : 0;
+  const totCpa  = tot.total_pedidos  > 0 ? tot.ad_spend / tot.total_pedidos : 0;
+
+  const totalsRow = `
+    <tr style="font-weight:700; background: rgba(255,255,255,0.05); border-top: 2px solid rgba(255,255,255,0.2);">
+      <td colspan="2" style="text-align:right; padding-right: 12px;">TOTAL</td>
+      <td>${tot.total_pedidos}</td>
+      <td>${tot.devoluciones}</td>
+      <td>${tot.cancelados}</td>
+      <td>${fmt(tot.ingresos_brutos)}</td>
+      <td>${fmt(tot.margen_bruto)}</td>
+      <td style="color: var(--amber)">${fmt(tot.ad_spend)}</td>
+      <td>${fmt(totCpa)}</td>
+      <td style="color: ${tot.utilidad_total >= 0 ? 'var(--green)' : 'var(--red)'};">${fmt(tot.utilidad_total)}</td>
+      <td>${fmtPct(totRoi)}</td>
+    </tr>
+  `;
+
+  tbody.innerHTML = rows + totalsRow;
 }
 
 async function loadMappings() {
