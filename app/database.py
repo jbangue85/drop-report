@@ -105,6 +105,13 @@ CREATE TABLE IF NOT EXISTS meta_ads_spend (
 );
 """
 
+CREATE_CAMPAIGN_MAP = """
+CREATE TABLE IF NOT EXISTS campaign_map (
+    campaign_name TEXT PRIMARY KEY,
+    producto      TEXT
+);
+"""
+
 def get_db() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -120,6 +127,7 @@ def init_db():
     conn.execute(CREATE_CALL_NOTES)
     conn.execute(CREATE_USERS)
     conn.execute(CREATE_META_ADS_SPEND)
+    conn.execute(CREATE_CAMPAIGN_MAP)
     conn.commit()
     conn.close()
 

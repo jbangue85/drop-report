@@ -212,7 +212,7 @@ function renderKpis(k) {
 function renderDailyControl(data) {
   const tbody = document.querySelector('#control-table tbody');
   if (!data || data.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="10" class="empty-row">No hay datos en el período</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="11" class="empty-row">No hay datos en el período</td></tr>';
     return;
   }
   
@@ -222,6 +222,9 @@ function renderDailyControl(data) {
   tbody.innerHTML = data.map(r => `
     <tr>
       <td>${r.fecha}</td>
+      <td title="${r.producto}" style="max-width:150px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+        ${r.producto}
+      </td>
       <td>${r.total_pedidos}</td>
       <td>${r.entregados}</td>
       <td>${r.devoluciones} / ${r.cancelados}</td>

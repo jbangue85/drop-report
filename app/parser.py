@@ -175,18 +175,55 @@ def parse_meta_csv(file_bytes: bytes, filename: str) -> List[Dict[str, Any]]:
 
 
 def upsert_meta_spend(conn, records: List[Dict[str, Any]]) -> int:
-    """INSERT OR REPLACE meta ads spend. Returns count inserted/updated."""
+    """INSERT OR REPLACE meta ads spend and auto-map new campaigns."""
     if not records:
         return 0
 
+    # 1. Insert spend
     sql = """
         INSERT OR REPLACE INTO meta_ads_spend 
         (fecha, campaign_name, spend, results) 
         VALUES (?, ?, ?, ?)
     """
-    
     data = [(r["fecha"], r["campaign_name"], r["spend"], r["results"]) for r in records]
     conn.executemany(sql, data)
+
+    # 2. Find unmapped campaigns
+    all_campaigns = list(set(r["campaign_name"] for r in records))
+    placeholders = ",".join("?" * len(all_campaigns))
+    mapped = conn.execute(f"SELECT campaign_name FROM campaign_map WHERE campaign_name IN ({placeholders})", all_campaigns).fetchall()
+    mapped_set = set(r["campaign_name"] for r in mapped)
+    
+    unmapped = [c for c in all_campaigns if c not in mapped_set]
+    if unmapped:
+        # Get all products
+        products = [r[0] for r in conn.execute("SELECT DISTINCT producto FROM orders WHERE producto IS NOT NULL").fetchall()]
+        
+        import re
+        import unicodedata
+        def normalize(s):
+            if not s: return ""
+            s = unicodedata.normalize('NFD', s).encode('ascii', 'ignore').decode("utf-8")
+            s = s.lower()
+            return re.sub(r'[^a-z0-9]', ' ', s)
+            
+        map_data = []
+        for c in unmapped:
+            nc = set(normalize(c).split())
+            best_p = None
+            best_score = 0
+            for p in products:
+                np = set(normalize(p).split())
+                score = len(nc.intersection(np))
+                if score > best_score and score > 0:
+                    best_score = score
+                    best_p = p
+            
+            # Insert even if best_p is None, so it shows up in UI to be mapped
+            map_data.append((c, best_p))
+            
+        conn.executemany("INSERT OR REPLACE INTO campaign_map (campaign_name, producto) VALUES (?, ?)", map_data)
+
     conn.commit()
     return len(records)
 
