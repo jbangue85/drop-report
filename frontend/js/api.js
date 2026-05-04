@@ -80,6 +80,12 @@ const API = (() => {
     getDailyControl: (params = {}) =>
       request('GET', '/api/daily-control' + toQuery(params)),
 
+    getMappings: () =>
+      request('GET', '/api/mappings'),
+
+    saveMapping: (campaign_name, producto) =>
+      request('POST', '/api/mappings', { campaign_name, producto }),
+
     getFilterOptions: () =>
       request('GET', '/api/filters/options'),
 

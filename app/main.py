@@ -220,6 +220,47 @@ def chart_carriers(
     conn.close()
     return result
 
+@app.get("/api/mappings")
+def get_mappings(user=Depends(get_current_user)):
+    conn = get_db()
+    
+    # Get all campaigns from meta_ads_spend and their mapped product
+    query = """
+        SELECT DISTINCT s.campaign_name, m.producto 
+        FROM meta_ads_spend s
+        LEFT JOIN campaign_map m ON s.campaign_name = m.campaign_name
+        ORDER BY s.campaign_name
+    """
+    mappings = [dict(r) for r in conn.execute(query).fetchall()]
+    
+    # Get all unique products from orders
+    products = [r["producto"] for r in conn.execute("SELECT DISTINCT producto FROM orders WHERE producto IS NOT NULL ORDER BY producto").fetchall()]
+    
+    conn.close()
+    return {"mappings": mappings, "products": products}
+
+@app.post("/api/mappings")
+async def save_mapping(
+    request: Request,
+    user=Depends(get_current_user)
+):
+    data = await request.json()
+    campaign_name = data.get("campaign_name")
+    producto = data.get("producto")
+    
+    if not campaign_name:
+        raise HTTPException(status_code=400, detail="Falta campaign_name")
+        
+    conn = get_db()
+    if producto:
+        conn.execute("INSERT OR REPLACE INTO campaign_map (campaign_name, producto) VALUES (?, ?)", (campaign_name, producto))
+    else:
+        conn.execute("DELETE FROM campaign_map WHERE campaign_name = ?", (campaign_name,))
+    conn.commit()
+    conn.close()
+    return {"status": "ok"}
+
+
 
 @app.get("/api/filters/options")
 def filter_options(user=Depends(get_current_user)):

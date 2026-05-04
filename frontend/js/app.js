@@ -87,10 +87,12 @@ function switchTab(tab) {
   document.querySelectorAll('.nav-item').forEach(l => l.classList.toggle('active', l.dataset.tab === tab));
   document.querySelectorAll('.tab-content').forEach(s => s.classList.toggle('hidden', s.id !== `tab-${tab}`));
   document.getElementById('page-title').textContent =
-    { dashboard: 'Dashboard', calls: 'Panel de Llamadas', users: 'Gestión de Usuarios', control: 'Control Diario' }[tab];
+    { dashboard: 'Dashboard', calls: 'Panel de Llamadas', users: 'Gestión de Usuarios', control: 'Control Diario', mappings: 'Asignación de Campañas' }[tab];
 
   if (tab === 'users') {
     loadUsers();
+  } else if (tab === 'mappings') {
+    loadMappings();
   }
 }
 
@@ -238,6 +240,54 @@ function renderDailyControl(data) {
       <td>${fmtPct(r.roi)}</td>
     </tr>
   `).join('');
+}
+
+async function loadMappings() {
+  try {
+    const data = await API.getMappings();
+    const tbody = document.querySelector('#mappings-table tbody');
+    if (!data.mappings || data.mappings.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="2" class="empty-row">No hay campañas registradas aún.</td></tr>';
+      return;
+    }
+
+    const productsHtml = `<option value="">-- Sin asignar --</option>` + 
+      data.products.map(p => `<option value="${p}">${p}</option>`).join('');
+
+    tbody.innerHTML = data.mappings.map(m => `
+      <tr>
+        <td><strong>${m.campaign_name}</strong></td>
+        <td>
+          <select class="select-input product-mapping-select" data-campaign="${m.campaign_name}">
+            ${productsHtml}
+          </select>
+        </td>
+      </tr>
+    `).join('');
+
+    // Set selected values and add event listeners
+    document.querySelectorAll('.product-mapping-select').forEach((sel, i) => {
+      sel.value = data.mappings[i].producto || "";
+      sel.addEventListener('change', async (e) => {
+        const campaign = e.target.dataset.campaign;
+        const producto = e.target.value;
+        sel.disabled = true;
+        try {
+          await API.saveMapping(campaign, producto);
+          // show a tiny success check next to it? or just flash green
+          sel.style.borderColor = 'var(--green)';
+          setTimeout(() => sel.style.borderColor = 'var(--border)', 1500);
+        } catch(err) {
+          alert("Error guardando asignación: " + err.message);
+          sel.style.borderColor = 'var(--red)';
+        } finally {
+          sel.disabled = false;
+        }
+      });
+    });
+  } catch (err) {
+    console.error(err);
+  }
 }
 
 function renderProductsTable(products) {
