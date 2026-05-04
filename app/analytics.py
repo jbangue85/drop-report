@@ -119,7 +119,8 @@ def calc_daily_trend(conn, date_from=None, date_to=None) -> list:
     results = {}
     for r in orders_rows:
         fecha = r["fecha"]
-        tasa = round((r["entregados"] * 100.0 / r["finalizados"]), 1) if r["finalizados"] > 0 else 0
+        # Use despachados as denominator for a more realistic daily progress view
+        tasa = round((r["entregados"] * 100.0 / r["despachados"]), 1) if r["despachados"] > 0 else 0
         results[fecha] = {
             "fecha": fecha,
             "pedidos": r["pedidos"],
