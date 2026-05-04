@@ -101,9 +101,10 @@ const CHARTS = (() => {
     const ctx = document.getElementById('chart-trend');
     if (!ctx || !data.length) return;
 
-    const labels   = data.map(d => formatDateLabel(d.fecha));
-    const ganancia = data.map(d => d.ganancia);
-    const tasas    = data.map(d => d.tasa_entrega);
+    const labels      = data.map(d => formatDateLabel(d.fecha));
+    const despachados = data.map(d => d.despachados);
+    const entregados  = data.map(d => d.entregados);
+    const tasas       = data.map(d => d.tasa_entrega);
 
     instances['trend'] = new Chart(ctx, {
       type: 'line',
@@ -111,26 +112,39 @@ const CHARTS = (() => {
         labels,
         datasets: [
           {
-            label: 'Ganancia',
-            data: ganancia,
-            backgroundColor: 'rgba(16,185,129,0.15)',
-            borderColor: '#10b981',
+            label: 'Despachados',
+            data: despachados,
+            backgroundColor: 'rgba(59,130,246,0.1)',
+            borderColor: '#3b82f6',
             borderWidth: 2,
-            pointBackgroundColor: '#10b981',
+            pointBackgroundColor: '#3b82f6',
             pointRadius: 3,
-            tension: 0.35,
+            tension: 0.3,
             fill: true,
             yAxisID: 'y',
           },
           {
-            label: 'Tasa de Entrega',
+            label: 'Entregados',
+            data: entregados,
+            backgroundColor: 'rgba(16,185,129,0.1)',
+            borderColor: '#10b981',
+            borderWidth: 2,
+            pointBackgroundColor: '#10b981',
+            pointRadius: 3,
+            tension: 0.3,
+            fill: true,
+            yAxisID: 'y',
+          },
+          {
+            label: 'Tasa %',
             data: tasas,
-            backgroundColor: 'rgba(245,158,11,0.1)',
+            backgroundColor: 'transparent',
             borderColor: '#f59e0b',
             borderWidth: 2,
+            borderDash: [5, 5],
             pointBackgroundColor: '#f59e0b',
             pointRadius: 3,
-            tension: 0.35,
+            tension: 0.3,
             fill: false,
             yAxisID: 'y1',
           },
@@ -143,11 +157,9 @@ const CHARTS = (() => {
         scales: {
           x: { grid: { color: 'rgba(255,255,255,0.04)' } },
           y: {
-            title: { display: true, text: 'Ganancia ($)', color: '#10b981' },
+            title: { display: true, text: 'Cantidad de Pedidos', color: '#94a3b8' },
             grid: { color: 'rgba(255,255,255,0.04)' },
-            ticks: {
-              callback: (v) => formatCOP(v, true),
-            },
+            beginAtZero: true,
           },
           y1: {
             title: { display: true, text: 'Tasa Entrega (%)', color: '#f59e0b' },
@@ -166,8 +178,8 @@ const CHARTS = (() => {
             callbacks: {
               label: (ctx) => {
                 const val = ctx.parsed.y;
-                if (ctx.dataset.label === 'Ganancia') return ` ${ctx.dataset.label}: ${formatCOP(val)}`;
-                return ` ${ctx.dataset.label}: ${val}%`;
+                if (ctx.dataset.label === 'Tasa %') return ` ${ctx.dataset.label}: ${val}%`;
+                return ` ${ctx.dataset.label}: ${val} pedidos`;
               },
             },
           },

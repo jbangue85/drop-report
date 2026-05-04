@@ -106,6 +106,7 @@ def calc_daily_trend(conn, date_from=None, date_to=None) -> list:
                 ELSE ganancia END
             ), 0) AS ganancia,
             COUNT(CASE WHEN estatus = 'ENTREGADO' THEN 1 END) AS entregados,
+            COUNT(CASE WHEN estatus IN ('DESPACHADA', 'EN REPARTO', 'EN ESPERA DE RUTA DOMESTICA', 'ENTREGADO', 'DEVOLUCION', 'NOVEDAD', 'EN BODEGA TRANSPORTADORA', 'EN REEXPEDICION', 'GUIA_GENERADA', 'PREPARADO PARA TRANSPORTADORA') THEN 1 END) AS despachados,
             COUNT(CASE WHEN estatus IN ('ENTREGADO','CANCELADO','DEVOLUCION','DEVOLUCION EN BODEGA') THEN 1 END) AS finalizados
         FROM orders {where}
         GROUP BY fecha
@@ -124,7 +125,9 @@ def calc_daily_trend(conn, date_from=None, date_to=None) -> list:
             "pedidos": r["pedidos"],
             "ingresos": r["ingresos"],
             "ganancia": r["ganancia"] - spend_dict.get(fecha, 0),
-            "tasa_entrega": tasa
+            "tasa_entrega": tasa,
+            "entregados": r["entregados"],
+            "despachados": r["despachados"]
         }
         
     for r in spend_rows:
@@ -135,7 +138,9 @@ def calc_daily_trend(conn, date_from=None, date_to=None) -> list:
                 "pedidos": 0,
                 "ingresos": 0,
                 "ganancia": -r["spend"],
-                "tasa_entrega": 0
+                "tasa_entrega": 0,
+                "entregados": 0,
+                "despachados": 0
             }
             
     return sorted(list(results.values()), key=lambda x: x["fecha"], reverse=False)
