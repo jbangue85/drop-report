@@ -47,7 +47,9 @@ def calc_kpis(conn: sqlite3.Connection, date_from=None, date_to=None, estatus=No
             COUNT(CASE WHEN estatus IN ('PENDIENTE CONFIRMACION','NOVEDAD') THEN 1 END) AS requieren_accion,
             ROUND(
                 COUNT(CASE WHEN estatus = 'ENTREGADO' THEN 1 END) * 100.0
-                / NULLIF(COUNT(CASE WHEN estatus != 'PENDIENTE' AND estatus != 'PENDIENTE CONFIRMACION' THEN 1 END), 0),
+                / NULLIF(COUNT(CASE WHEN estatus IN (
+                    'ENTREGADO','CANCELADO','DEVOLUCION','DEVOLUCION EN BODEGA'
+                ) THEN 1 END), 0),
                 1
             )                                                                       AS tasa_entrega
         FROM orders {where}
