@@ -4,7 +4,11 @@
 
 /* ═══════════════════════════ STATE ═════════════════════════════════ */
 const state = {
-  filters: { date_from: null, date_to: null, estatus: null },
+  filters: { 
+    date_from: new Date(new Date().setDate(new Date().getDate() - 29)).toISOString().split('T')[0], 
+    date_to: new Date().toISOString().split('T')[0], 
+    estatus: null 
+  },
   activeTab: 'dashboard',
   currentUser: null,
   callFilter: 'all',
