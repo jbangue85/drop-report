@@ -627,6 +627,7 @@ input, select, textarea { font-family: inherit; }
   
   .sidebar {
     position: fixed;
+    top: auto;
     bottom: 0;
     left: 0; right: 0;
     height: 65px;
@@ -636,6 +637,7 @@ input, select, textarea { font-family: inherit; }
     z-index: 100;
     background: rgba(15, 17, 21, 0.95);
     backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
   }
   .sidebar-header { display: none; }
   .sidebar-nav { 
@@ -675,8 +677,14 @@ input, select, textarea { font-family: inherit; }
   .kpi-label { font-size: 0.75rem; }
   .kpi-value { font-size: 1.25rem; }
   
-  .charts-grid { grid-template-columns: 1fr; }
-  .chart-donut-wrap, .chart-trend-wrap { grid-column: 1; }
+  .charts-grid { 
+    grid-template-columns: 1fr; 
+    grid-template-rows: auto;
+  }
+  .chart-donut-wrap, .chart-trend-wrap { 
+    grid-column: auto; 
+    grid-row: auto; 
+  }
 
   .chart-card { padding: 1rem; }
   .chart-trend-wrap canvas, #chart-carriers { max-height: 220px !important; }
