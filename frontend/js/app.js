@@ -189,11 +189,24 @@ async function loadDashboard() {
 function renderKpis(k) {
   const fmt = CHARTS.formatCOP;
 
-  document.getElementById('val-ganancia').textContent    = fmt(k.ganancia_proyectada);
-  document.getElementById('val-confirmada').textContent  = fmt(k.ganancia_real || 0);
+  const valProy = k.ganancia_proyectada || 0;
+  const valConf = k.ganancia_real || 0;
+
+  document.getElementById('val-ganancia').textContent    = fmt(valProy);
+  document.getElementById('val-confirmada').textContent  = fmt(valConf);
   document.getElementById('val-ads').textContent         = fmt(k.ad_spend || 0);
   document.getElementById('val-pedidos').textContent     = k.volumen_pedidos ?? '—';
   document.getElementById('val-tasa').textContent        = k.tasa_entrega != null ? `${k.tasa_entrega}%` : '—';
+
+  // Dynamic colors
+  const cardProy = document.getElementById('kpi-ganancia');
+  const cardConf = document.getElementById('kpi-confirmada');
+
+  cardProy.classList.toggle('kpi-green', valProy >= 0);
+  cardProy.classList.toggle('kpi-red', valProy < 0);
+  
+  cardConf.classList.toggle('kpi-green', valConf >= 0);
+  cardConf.classList.toggle('kpi-red', valConf < 0);
 
   document.getElementById('sub-ads').textContent = 
     `Inversión Meta Ads ${k.ads_iva > 0 ? `(+${k.ads_iva.toFixed(0)}% IVA)` : ''}`;

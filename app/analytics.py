@@ -74,6 +74,7 @@ def calc_kpis(conn: sqlite3.Connection, date_from=None, date_to=None, estatus=No
     if kpis:
         kpis["margen_bruto"] = kpis["ganancia_proyectada"] # Save raw margin
         kpis["ganancia_proyectada"] -= total_spend
+        kpis["ganancia_real"] -= total_spend
         kpis["ad_spend"] = total_spend
         kpis["ads_iva"] = (iva_factor - 1.0) * 100
     return kpis
