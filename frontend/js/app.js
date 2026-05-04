@@ -189,14 +189,12 @@ async function loadDashboard() {
 function renderKpis(k) {
   const fmt = CHARTS.formatCOP;
 
-  document.getElementById('val-ingresos').textContent = fmt(k.ingresos_brutos);
-  document.getElementById('val-ganancia').textContent = fmt(k.ganancia_proyectada);
-  document.getElementById('val-pedidos').textContent  = k.volumen_pedidos ?? '—';
-  document.getElementById('val-tasa').textContent     = k.tasa_entrega != null ? `${k.tasa_entrega}%` : '—';
-
-  document.getElementById('sub-ganancia').innerHTML =
-    (k.ganancia_real > 0 ? `Confirmada: ${fmt(k.ganancia_real)}<br/>` : '') +
-    `Gasto en Ads: <strong style="color:var(--amber)">${fmt(k.ad_spend || 0)}</strong>`;
+  document.getElementById('val-ingresos').textContent    = fmt(k.ingresos_brutos);
+  document.getElementById('val-ganancia').textContent    = fmt(k.ganancia_proyectada);
+  document.getElementById('val-confirmada').textContent  = fmt(k.ganancia_real || 0);
+  document.getElementById('val-ads').textContent         = fmt(k.ad_spend || 0);
+  document.getElementById('val-pedidos').textContent     = k.volumen_pedidos ?? '—';
+  document.getElementById('val-tasa').textContent        = k.tasa_entrega != null ? `${k.tasa_entrega}%` : '—';
 
   document.getElementById('sub-pedidos').textContent =
     `${k.entregados ?? 0} entregados · ${k.requieren_accion ?? 0} requieren gestión`;
