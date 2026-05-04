@@ -107,12 +107,19 @@
             <option value="">Todos los estados</option>
           </select>
         </div>
-        <!-- Upload button -->
-        <label for="file-upload-input" class="btn btn-primary btn-sm" id="upload-btn-label">
-          ⬆ Subir Datos (Dropi/Meta)
-        </label>
-        <input type="file" id="file-upload-input" accept=".xlsx,.xls,.csv" class="hidden" />
-        <div id="upload-status" class="upload-status hidden"></div>
+        <div class="header-right" style="display: flex; gap: 10px; align-items: center;">
+          <label for="upload-dropi" class="btn btn-primary btn-sm" id="upload-dropi-label">
+            <span class="nav-icon">📦</span> Subir Dropi
+          </label>
+          <input type="file" id="upload-dropi" accept=".xlsx,.xls" class="hidden" />
+
+          <label for="upload-meta" class="btn btn-sm" style="background-color: var(--blue); color: white; border: none; cursor: pointer; display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; border-radius: 6px; font-weight: 500;" id="upload-meta-label">
+            <span class="nav-icon">📈</span> Subir Meta Ads
+          </label>
+          <input type="file" id="upload-meta" accept=".csv" class="hidden" />
+          
+          <div id="upload-status" class="upload-status hidden"></div>
+        </div>
       </div>
     </header>
 
@@ -370,9 +377,9 @@
   </div>
 </div>
 
-<script src="/js/api.js?v=6"></script>
-<script src="/js/charts.js?v=6"></script>
-<script src="/js/app.js?v=6"></script>
+<script src="/js/api.js?v=7"></script>
+<script src="/js/charts.js?v=7"></script>
+<script src="/js/app.js?v=7"></script>
 </body>
 </html>
 

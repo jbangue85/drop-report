@@ -309,14 +309,18 @@ function renderProductsTable(products) {
 
 /* ═══════════════════════════ FILE UPLOAD ══════════════════════════ */
 function setupUploadHandler(inputId) {
-  document.getElementById(inputId).addEventListener('change', async (e) => {
+  const el = document.getElementById(inputId);
+  if (!el) return;
+  
+  el.addEventListener('change', async (e) => {
     const file = e.target.files[0];
     if (!file) return;
     await doUpload(file);
-    e.target.value = '';
+    e.target.value = ''; // Reset input after upload
   });
 }
-setupUploadHandler('file-upload-input');
+setupUploadHandler('upload-dropi');
+setupUploadHandler('upload-meta');
 
 async function doUpload(file) {
   const statusEl = document.getElementById('upload-status');

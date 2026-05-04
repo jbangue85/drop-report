@@ -1,11 +1,17 @@
-import requests
+import asyncio
+from app.database import get_db
 
-r1 = requests.post("http://localhost:8080/api/auth/login", json={"username": "admin", "password": "admin123"})
-if "token" not in r1.json():
-    print("Login failed:", r1.json())
+with open("Mercatelia-Campañas-1-a-r-2026---4-may-2026 (1).csv", "rb") as f:
+    content = f.read()
+
+conn = get_db()
+from app.parser import parse_meta_csv, upsert_meta_spend
+
+records = parse_meta_csv(content, "test.csv")
+print("Parsed Meta CSV records:", len(records))
+if len(records) > 0:
+    count = upsert_meta_spend(conn, records)
+    print("Upserted:", count)
 else:
-    token = r1.json()["token"]
-    with open("Mercatelia-Campañas-1-a-r-2026---4-may-2026 (1).csv", "rb") as f:
-        files = {"file": f}
-        r2 = requests.post("http://localhost:8080/api/upload", headers={"Authorization": f"Bearer {token}"}, files=files)
-        print("Upload result:", r2.status_code, r2.json())
+    print("NO RECORDS")
+
