@@ -104,7 +104,9 @@ def calc_daily_trend(conn, date_from=None, date_to=None) -> list:
                 CASE WHEN ganancia IS NULL
                 THEN total_orden - COALESCE(precio_proveedor_x_cantidad,0) - COALESCE(precio_flete,0)
                 ELSE ganancia END
-            ), 0) AS ganancia
+            ), 0) AS ganancia,
+            COUNT(CASE WHEN estatus = 'ENTREGADO' THEN 1 END) AS entregados,
+            COUNT(CASE WHEN estatus IN ('ENTREGADO','CANCELADO','DEVOLUCION','DEVOLUCION EN BODEGA') THEN 1 END) AS finalizados
         FROM orders {where}
         GROUP BY fecha
     """, params).fetchall()
@@ -116,11 +118,13 @@ def calc_daily_trend(conn, date_from=None, date_to=None) -> list:
     results = {}
     for r in orders_rows:
         fecha = r["fecha"]
+        tasa = round((r["entregados"] * 100.0 / r["finalizados"]), 1) if r["finalizados"] > 0 else 0
         results[fecha] = {
             "fecha": fecha,
             "pedidos": r["pedidos"],
             "ingresos": r["ingresos"],
-            "ganancia": r["ganancia"] - spend_dict.get(fecha, 0)
+            "ganancia": r["ganancia"] - spend_dict.get(fecha, 0),
+            "tasa_entrega": tasa
         }
         
     for r in spend_rows:
@@ -130,7 +134,8 @@ def calc_daily_trend(conn, date_from=None, date_to=None) -> list:
                 "fecha": fecha,
                 "pedidos": 0,
                 "ingresos": 0,
-                "ganancia": -r["spend"]
+                "ganancia": -r["spend"],
+                "tasa_entrega": 0
             }
             
     return sorted(list(results.values()), key=lambda x: x["fecha"], reverse=False)

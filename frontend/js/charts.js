@@ -102,8 +102,8 @@ const CHARTS = (() => {
     if (!ctx || !data.length) return;
 
     const labels   = data.map(d => formatDateLabel(d.fecha));
-    const ingresos = data.map(d => d.ingresos);
     const ganancia = data.map(d => d.ganancia);
+    const tasas    = data.map(d => d.tasa_entrega);
 
     instances['trend'] = new Chart(ctx, {
       type: 'line',
@@ -111,26 +111,28 @@ const CHARTS = (() => {
         labels,
         datasets: [
           {
-            label: 'Ingresos',
-            data: ingresos,
-            backgroundColor: 'rgba(124,58,237,0.1)',
-            borderColor: '#7c3aed',
-            borderWidth: 2,
-            pointBackgroundColor: '#7c3aed',
-            pointRadius: 4,
-            tension: 0.35,
-            fill: true,
-          },
-          {
             label: 'Ganancia',
             data: ganancia,
             backgroundColor: 'rgba(16,185,129,0.15)',
             borderColor: '#10b981',
             borderWidth: 2,
             pointBackgroundColor: '#10b981',
-            pointRadius: 4,
+            pointRadius: 3,
             tension: 0.35,
             fill: true,
+            yAxisID: 'y',
+          },
+          {
+            label: 'Tasa de Entrega',
+            data: tasas,
+            backgroundColor: 'rgba(245,158,11,0.1)',
+            borderColor: '#f59e0b',
+            borderWidth: 2,
+            pointBackgroundColor: '#f59e0b',
+            pointRadius: 3,
+            tension: 0.35,
+            fill: false,
+            yAxisID: 'y1',
           },
         ],
       },
@@ -141,9 +143,20 @@ const CHARTS = (() => {
         scales: {
           x: { grid: { color: 'rgba(255,255,255,0.04)' } },
           y: {
+            title: { display: true, text: 'Ganancia ($)', color: '#10b981' },
             grid: { color: 'rgba(255,255,255,0.04)' },
             ticks: {
               callback: (v) => formatCOP(v, true),
+            },
+          },
+          y1: {
+            title: { display: true, text: 'Tasa Entrega (%)', color: '#f59e0b' },
+            position: 'right',
+            min: 0,
+            max: 100,
+            grid: { drawOnChartArea: false },
+            ticks: {
+              callback: (v) => `${v}%`,
             },
           },
         },
@@ -151,14 +164,16 @@ const CHARTS = (() => {
           legend: { position: 'top', labels: { boxWidth: 12, padding: 16 } },
           tooltip: {
             callbacks: {
-              label: (ctx) => ` ${ctx.dataset.label}: ${formatCOP(ctx.parsed.y)}`,
+              label: (ctx) => {
+                const val = ctx.parsed.y;
+                if (ctx.dataset.label === 'Ganancia') return ` ${ctx.dataset.label}: ${formatCOP(val)}`;
+                return ` ${ctx.dataset.label}: ${val}%`;
+              },
             },
           },
         },
       },
     });
-
-    // Let CSS control the height completely for mobile responsiveness
   }
 
   // ── Pie/Donut: Carrier performance ──────────────────────────────
