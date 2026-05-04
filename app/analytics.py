@@ -45,9 +45,12 @@ def calc_kpis(conn: sqlite3.Connection, date_from=None, date_to=None, estatus=No
             COALESCE(SUM(total_orden), 0)                                          AS ingresos_brutos,
             COALESCE(SUM(ganancia), 0)                                             AS ganancia_real,
             COALESCE(SUM(
-                CASE WHEN ganancia IS NULL
-                THEN total_orden - COALESCE(precio_proveedor_x_cantidad,0) - COALESCE(precio_flete,0)
-                ELSE ganancia END
+                CASE 
+                    WHEN estatus = 'CANCELADO' THEN 0
+                    WHEN estatus IN ('DEVOLUCION', 'DEVOLUCION EN BODEGA') THEN -COALESCE(precio_flete, 0)
+                    WHEN ganancia IS NOT NULL AND ganancia != 0 THEN ganancia
+                    ELSE total_orden - COALESCE(precio_proveedor_x_cantidad, 0) - COALESCE(precio_flete, 0)
+                END
             ), 0)                                                                   AS ganancia_proyectada,
             COUNT(*)                                                                AS volumen_pedidos,
             COUNT(CASE WHEN estatus = 'ENTREGADO' THEN 1 END)                      AS entregados,
@@ -101,9 +104,12 @@ def calc_daily_trend(conn, date_from=None, date_to=None) -> list:
             COUNT(*) AS pedidos,
             COALESCE(SUM(total_orden), 0) AS ingresos,
             COALESCE(SUM(
-                CASE WHEN ganancia IS NULL
-                THEN total_orden - COALESCE(precio_proveedor_x_cantidad,0) - COALESCE(precio_flete,0)
-                ELSE ganancia END
+                CASE 
+                    WHEN estatus = 'CANCELADO' THEN 0
+                    WHEN estatus IN ('DEVOLUCION', 'DEVOLUCION EN BODEGA') THEN -COALESCE(precio_flete, 0)
+                    WHEN ganancia IS NOT NULL AND ganancia != 0 THEN ganancia
+                    ELSE total_orden - COALESCE(precio_proveedor_x_cantidad, 0) - COALESCE(precio_flete, 0)
+                END
             ), 0) AS ganancia,
             COUNT(CASE WHEN estatus = 'ENTREGADO' THEN 1 END) AS entregados,
             COUNT(CASE WHEN estatus IN ('DESPACHADA', 'EN REPARTO', 'EN ESPERA DE RUTA DOMESTICA', 'ENTREGADO', 'DEVOLUCION', 'NOVEDAD', 'EN BODEGA TRANSPORTADORA', 'EN REEXPEDICION', 'GUIA_GENERADA', 'PREPARADO PARA TRANSPORTADORA') THEN 1 END) AS despachados,
@@ -160,9 +166,12 @@ def calc_daily_control(conn, date_from=None, date_to=None) -> list:
             COUNT(CASE WHEN estatus = 'DEVOLUCION' THEN 1 END) AS devoluciones,
             COALESCE(SUM(total_orden), 0) AS ingresos_brutos,
             COALESCE(SUM(
-                CASE WHEN ganancia IS NULL
-                THEN total_orden - COALESCE(precio_proveedor_x_cantidad,0) - COALESCE(precio_flete,0)
-                ELSE ganancia END
+                CASE 
+                    WHEN estatus = 'CANCELADO' THEN 0
+                    WHEN estatus IN ('DEVOLUCION', 'DEVOLUCION EN BODEGA') THEN -COALESCE(precio_flete, 0)
+                    WHEN ganancia IS NOT NULL AND ganancia != 0 THEN ganancia
+                    ELSE total_orden - COALESCE(precio_proveedor_x_cantidad, 0) - COALESCE(precio_flete, 0)
+                END
             ), 0) AS margen_bruto
         FROM orders {where}
         GROUP BY fecha, COALESCE(producto, 'Sin Producto')
