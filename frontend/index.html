@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Drop Report — Dashboard Operativo</title>
+  <meta name="description" content="Panel de control operativo para monitorear KPIs de dropshipping en tiempo real." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+
+<!-- ═══════════════════════════ LOGIN SCREEN ════════════════════════════════ -->
+<div id="login-screen" class="login-screen">
+  <div class="login-card">
+    <div class="login-logo">
+      <span class="logo-icon">📦</span>
+      <h1>Drop Report</h1>
+      <p>Dashboard Operativo</p>
+    </div>
+    <form id="login-form" class="login-form" autocomplete="off">
+      <div class="field-group">
+        <label for="login-user">Usuario</label>
+        <input id="login-user" type="text" placeholder="admin" autocomplete="username" required />
+      </div>
+      <div class="field-group">
+        <label for="login-pass">Contraseña</label>
+        <input id="login-pass" type="password" placeholder="••••••••" autocomplete="current-password" required />
+      </div>
+      <div id="login-error" class="login-error hidden">Credenciales incorrectas</div>
+      <button id="login-btn" type="submit" class="btn btn-primary btn-full">Ingresar</button>
+    </form>
+  </div>
+</div>
+
+<!-- ═══════════════════════════ MAIN APP ════════════════════════════════════ -->
+<div id="app" class="app hidden">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <span class="logo-icon">📦</span>
+      <span class="logo-text">Drop Report</span>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="#" class="nav-item active" data-tab="dashboard" id="nav-dashboard">
+        <span class="nav-icon">📊</span>
+        <span>Dashboard</span>
+      </a>
+      <a href="#" class="nav-item" data-tab="calls" id="nav-calls">
+        <span class="nav-icon">📞</span>
+        <span>Panel de Llamadas</span>
+        <span id="calls-badge" class="badge hidden">0</span>
+      </a>
+      <a href="#" class="nav-item hidden" data-tab="users" id="nav-users">
+        <span class="nav-icon">👥</span>
+        <span>Usuarios</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-bottom">
+      <div class="user-info">
+        <span class="nav-icon">👤</span>
+        <span id="sidebar-username">admin</span>
+      </div>
+      <button id="logout-btn" class="btn btn-ghost btn-sm">Salir</button>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="main-content">
+
+    <!-- ── TOP BAR ── -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <h2 id="page-title">Dashboard</h2>
+        <span id="last-updated" class="topbar-sub"></span>
+      </div>
+      <div class="topbar-right">
+        <!-- Date filters -->
+        <div class="filter-group">
+          <select id="filter-preset" class="select-input">
+            <option value="all">Todo el período</option>
+            <option value="today">Hoy</option>
+            <option value="7d">Últimos 7 días</option>
+            <option value="30d">Últimos 30 días</option>
+            <option value="custom">Personalizado</option>
+          </select>
+          <input type="date" id="filter-date-from" class="date-input hidden" />
+          <input type="date" id="filter-date-to" class="date-input hidden" />
+        </div>
+        <!-- Status filter -->
+        <div class="filter-group">
+          <select id="filter-estatus" class="select-input">
+            <option value="">Todos los estados</option>
+          </select>
+        </div>
+        <!-- Upload button -->
+        <label for="file-upload-input" class="btn btn-primary btn-sm" id="upload-btn-label">
+          ⬆ Subir XLSX
+        </label>
+        <input type="file" id="file-upload-input" accept=".xlsx,.xls" class="hidden" />
+        <div id="upload-status" class="upload-status hidden"></div>
+      </div>
+    </header>
+
+    <!-- ══════════════ DASHBOARD TAB ══════════════ -->
+    <section id="tab-dashboard" class="tab-content active">
+
+      <!-- KPI CARDS -->
+      <div class="kpi-grid" id="kpi-grid">
+        <div class="kpi-card" id="kpi-ingresos">
+          <div class="kpi-label">Ingresos Brutos</div>
+          <div class="kpi-value" id="val-ingresos">—</div>
+          <div class="kpi-sub">Suma total de órdenes</div>
+        </div>
+        <div class="kpi-card kpi-green" id="kpi-ganancia">
+          <div class="kpi-label">Ganancia Proyectada</div>
+          <div class="kpi-value" id="val-ganancia">—</div>
+          <div class="kpi-sub" id="sub-ganancia">Ingresos − proveedor − flete</div>
+        </div>
+        <div class="kpi-card" id="kpi-pedidos">
+          <div class="kpi-label">Volumen de Pedidos</div>
+          <div class="kpi-value" id="val-pedidos">—</div>
+          <div class="kpi-sub" id="sub-pedidos">órdenes registradas</div>
+        </div>
+        <div class="kpi-card kpi-amber" id="kpi-tasa">
+          <div class="kpi-label">Tasa de Entrega</div>
+          <div class="kpi-value" id="val-tasa">—</div>
+          <div class="kpi-sub" id="sub-tasa">Entregados / Despachados</div>
+        </div>
+      </div>
+
+      <!-- CHARTS GRID -->
+      <div class="charts-grid">
+        <!-- Donut: status distribution -->
+        <div class="chart-card chart-donut-wrap">
+          <div class="chart-header">
+            <h3>Embudo de Envíos</h3>
+            <span class="chart-sub">Distribución por estado</span>
+          </div>
+          <div class="donut-container">
+            <canvas id="chart-status"></canvas>
+            <div id="donut-center" class="donut-center"></div>
+          </div>
+          <div id="status-legend" class="status-legend"></div>
+        </div>
+
+        <!-- Line: daily trend -->
+        <div class="chart-card chart-trend-wrap">
+          <div class="chart-header">
+            <h3>Tendencia de Ventas</h3>
+            <span class="chart-sub">Ingresos y ganancia por día</span>
+          </div>
+          <canvas id="chart-trend"></canvas>
+        </div>
+
+        <!-- Pie: carrier performance -->
+        <div class="chart-card chart-carriers-wrap">
+          <div class="chart-header">
+            <h3>Desempeño Logístico</h3>
+            <span class="chart-sub">Volumen de envíos por transportadora</span>
+          </div>
+          <canvas id="chart-carriers"></canvas>
+        </div>
+
+        <!-- Table: product ranking -->
+        <div class="chart-card">
+          <div class="chart-header">
+            <h3>Ranking de Productos</h3>
+            <span class="chart-sub">Top productos por unidades vendidas</span>
+          </div>
+          <div class="table-wrap">
+            <table id="table-products" class="data-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Producto</th>
+                  <th>Unidades</th>
+                  <th>Pedidos</th>
+                  <th>Ingresos</th>
+                </tr>
+              </thead>
+              <tbody id="table-products-body">
+                <tr><td colspan="5" class="empty-row">Sin datos</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════════ CALLS TAB ══════════════ -->
+    <section id="tab-calls" class="tab-content hidden">
+      <div class="calls-header">
+        <div>
+          <h3>Órdenes que Requieren Gestión</h3>
+          <p class="calls-sub">Pendientes de confirmación y novedades activas. Registra el resultado de cada llamada.</p>
+          <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
+            <button class="btn btn-sm btn-primary call-filter-btn" data-filter="all">Todas</button>
+            <button class="btn btn-sm btn-ghost call-filter-btn" data-filter="pending">Por Llamar</button>
+            <button class="btn btn-sm btn-ghost call-filter-btn" data-filter="ready">Listos para Dropi</button>
+          </div>
+        </div>
+        <button id="calls-refresh-btn" class="btn btn-ghost btn-sm">↻ Actualizar</button>
+      </div>
+
+      <div id="calls-list" class="calls-list">
+        <div class="empty-state">Cargando...</div>
+      </div>
+    </section>
+
+
+    <!-- ══════════════ USERS TAB ══════════════ -->
+    <section id="tab-users" class="tab-content hidden">
+      <div class="uploads-header">
+        <h3>Gestión de Usuarios</h3>
+        <p class="calls-sub">Crea y administra los accesos al sistema (solo administrador).</p>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-top: 1.5rem;">
+        <!-- Create form -->
+        <div class="chart-card">
+          <div class="chart-header" style="margin-bottom: 1rem">
+            <h3>Nuevo Usuario</h3>
+          </div>
+          <form id="create-user-form" style="display: flex; flex-direction: column; gap: 1rem;">
+            <div class="field-group">
+              <label>Usuario</label>
+              <input type="text" id="new-user-name" required autocomplete="off" />
+            </div>
+            <div class="field-group">
+              <label>Contraseña</label>
+              <input type="password" id="new-user-pass" required autocomplete="new-password" />
+            </div>
+            <div class="field-group">
+              <label>Rol</label>
+              <select id="new-user-role" class="select-input">
+                <option value="agent">Agente (Call Center)</option>
+                <option value="admin">Administrador</option>
+              </select>
+            </div>
+            <div id="new-user-msg" style="font-size: 0.85rem; margin-top: 0.25rem;" class="hidden"></div>
+            <button type="submit" class="btn btn-primary" style="margin-top: 0.5rem">Crear Usuario</button>
+          </form>
+        </div>
+
+        <!-- Users list -->
+        <div class="chart-card">
+          <div class="chart-header" style="margin-bottom: 1rem">
+            <h3>Usuarios Registrados</h3>
+          </div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr><th>ID</th><th>Usuario</th><th>Rol</th></tr>
+              </thead>
+              <tbody id="users-body">
+                <tr><td colspan="3" class="empty-row">Cargando...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ═══════════════ CALL NOTE MODAL ══════════════════════════════════════════ -->
+<div id="call-modal" class="modal-overlay hidden">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3>Registrar Gestión de Llamada</h3>
+      <button id="modal-close" class="btn btn-ghost btn-icon">✕</button>
+    </div>
+    <div id="modal-order-info" class="modal-order-info"></div>
+    <form id="call-note-form" class="modal-form">
+      <input type="hidden" id="modal-order-id" />
+      <div class="field-group">
+        <label for="modal-resultado">Resultado de la llamada</label>
+        <select id="modal-resultado" class="select-input" required>
+          <option value="">Seleccionar resultado...</option>
+          <option value="CONTACTADO">✅ Contactado — confirmó pedido</option>
+          <option value="SOLUCIONADO">✔ Solucionado — novedad resuelta</option>
+          <option value="NO_CONTESTO">📵 No contestó</option>
+          <option value="BUZON">📨 Buzón de voz</option>
+          <option value="DEVOLUCION">↩ Solicitó devolución</option>
+          <option value="OTRO">🔹 Otro (especificar en notas)</option>
+        </select>
+      </div>
+      <div class="field-group">
+        <label for="modal-notas">Notas adicionales</label>
+        <textarea id="modal-notas" placeholder="Ej: Cliente dice que lo recibe mañana en horario de tarde..." rows="3"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button type="button" id="modal-cancel-btn" class="btn btn-ghost">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Guardar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script src="/js/charts.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>

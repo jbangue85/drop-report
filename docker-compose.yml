@@ -1,0 +1,40 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: drop-report:latest
+    container_name: drop-report
+
+    ports:
+      - "8000:8000"
+
+    # ── Persistent data ──────────────────────────────────────────────
+    # Bind mount: ./data on the HOST maps to /data inside the container.
+    # This means:
+    #   • Data survives container restarts / image rebuilds
+    #   • To migrate Mac → RPi: copy the ./data/ folder to the RPi
+    #     and run docker compose up there — all history is preserved.
+    volumes:
+      - ./data:/data
+
+    # ── Configuration ────────────────────────────────────────────────
+    # Override these in a .env file (never commit real passwords to git)
+    environment:
+      DB_PATH:      /data/dropreport.db
+      SECRET_KEY:   ${SECRET_KEY:-changeme-use-a-long-random-string}
+      ADMIN_USER:   ${ADMIN_USER:-admin}
+      ADMIN_PASS:   ${ADMIN_PASS:-dropi2024}
+      WORKERS:      ${WORKERS:-1}
+
+    env_file:
+      - .env
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/docs')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s

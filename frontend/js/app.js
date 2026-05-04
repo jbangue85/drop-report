@@ -1,0 +1,504 @@
+/**
+ * app.js — Main controller: auth, navigation, data loading, call center.
+ */
+
+/* ═══════════════════════════ STATE ═════════════════════════════════ */
+const state = {
+  filters: { date_from: null, date_to: null, estatus: null },
+  activeTab: 'dashboard',
+  currentUser: null,
+  callFilter: 'all',
+};
+
+/* ═══════════════════════════ BOOT ══════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', () => {
+  if (API.isLoggedIn()) {
+    showApp();
+  } else {
+    showLogin();
+  }
+});
+
+/* ═══════════════════════════ LOGIN ════════════════════════════════ */
+function showLogin() {
+  document.getElementById('login-screen').classList.remove('hidden');
+  document.getElementById('app').classList.add('hidden');
+}
+
+function showApp() {
+  document.getElementById('login-screen').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+
+  // Decode username from JWT payload (middle segment)
+  try {
+    const payload = JSON.parse(atob(API.getToken().split('.')[1]));
+    state.currentUser = payload;
+    document.getElementById('sidebar-username').textContent = payload.sub;
+
+    if (payload.role === 'admin') {
+      document.getElementById('nav-users').classList.remove('hidden');
+    }
+  } catch (_) {}
+
+  initFilters();
+  loadDashboard();
+  loadCallsPending();
+}
+
+document.getElementById('login-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('login-btn');
+  const err = document.getElementById('login-error');
+  err.classList.add('hidden');
+  btn.textContent = 'Ingresando...';
+  btn.disabled = true;
+
+  try {
+    const res = await API.login(
+      document.getElementById('login-user').value.trim(),
+      document.getElementById('login-pass').value,
+    );
+    API.setToken(res.access_token);
+    showApp();
+  } catch (ex) {
+    err.textContent = ex.message;
+    err.classList.remove('hidden');
+  } finally {
+    btn.textContent = 'Ingresar';
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('logout-btn').addEventListener('click', () => {
+  API.clearToken();
+  showLogin();
+});
+
+/* ═══════════════════════════ NAVIGATION ═══════════════════════════ */
+document.querySelectorAll('.nav-item').forEach(link => {
+  link.addEventListener('click', (e) => {
+    e.preventDefault();
+    switchTab(link.dataset.tab);
+  });
+});
+
+function switchTab(tab) {
+  state.activeTab = tab;
+  document.querySelectorAll('.nav-item').forEach(l => l.classList.toggle('active', l.dataset.tab === tab));
+  document.querySelectorAll('.tab-content').forEach(s => s.classList.toggle('hidden', s.id !== `tab-${tab}`));
+  document.getElementById('page-title').textContent =
+    { dashboard: 'Dashboard', calls: 'Panel de Llamadas', users: 'Gestión de Usuarios' }[tab];
+
+  if (tab === 'users') {
+    loadUsers();
+  }
+}
+
+/* ═══════════════════════════ FILTERS ══════════════════════════════ */
+async function initFilters() {
+  try {
+    const opts = await API.getFilterOptions();
+    const sel = document.getElementById('filter-estatus');
+    sel.innerHTML = '<option value="">Todos los estados</option>';
+    (opts.estatus || []).forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s;
+      opt.textContent = s;
+      sel.appendChild(opt);
+    });
+  } catch (_) {}
+}
+
+document.getElementById('filter-preset').addEventListener('change', (e) => {
+  const df = document.getElementById('filter-date-from');
+  const dt = document.getElementById('filter-date-to');
+  const val = e.target.value;
+
+  df.classList.add('hidden');
+  dt.classList.add('hidden');
+
+  const today = new Date();
+  const fmt = (d) => d.toISOString().split('T')[0];
+
+  if (val === 'today') {
+    state.filters.date_from = fmt(today);
+    state.filters.date_to   = fmt(today);
+  } else if (val === '7d') {
+    const from = new Date(today); from.setDate(today.getDate() - 6);
+    state.filters.date_from = fmt(from);
+    state.filters.date_to   = fmt(today);
+  } else if (val === '30d') {
+    const from = new Date(today); from.setDate(today.getDate() - 29);
+    state.filters.date_from = fmt(from);
+    state.filters.date_to   = fmt(today);
+  } else if (val === 'custom') {
+    df.classList.remove('hidden');
+    dt.classList.remove('hidden');
+    return;
+  } else {
+    state.filters.date_from = null;
+    state.filters.date_to   = null;
+  }
+
+  loadDashboard();
+});
+
+['filter-date-from', 'filter-date-to'].forEach(id => {
+  document.getElementById(id).addEventListener('change', (e) => {
+    state.filters[id === 'filter-date-from' ? 'date_from' : 'date_to'] = e.target.value || null;
+    loadDashboard();
+  });
+});
+
+document.getElementById('filter-estatus').addEventListener('change', (e) => {
+  state.filters.estatus = e.target.value || null;
+  loadDashboard();
+});
+
+/* ═══════════════════════════ DASHBOARD ════════════════════════════ */
+async function loadDashboard() {
+  const f = state.filters;
+  const params = { date_from: f.date_from, date_to: f.date_to, estatus: f.estatus };
+
+  try {
+    const [kpis, status, trend, products, carriers] = await Promise.all([
+      API.getKpis(params),
+      API.getStatusChart({ date_from: f.date_from, date_to: f.date_to }),
+      API.getTrendChart({ date_from: f.date_from, date_to: f.date_to }),
+      API.getProductsChart({ date_from: f.date_from, date_to: f.date_to }),
+      API.getCarriersChart({ date_from: f.date_from, date_to: f.date_to }),
+    ]);
+
+    renderKpis(kpis);
+    CHARTS.renderStatus(status);
+    CHARTS.renderTrend(trend);
+    renderProductsTable(products);
+    CHARTS.renderCarriers(carriers);
+
+    document.getElementById('last-updated').textContent =
+      'Actualizado: ' + new Date().toLocaleTimeString('es-CO');
+  } catch (err) {
+    console.error('Dashboard load error:', err);
+  }
+}
+
+function renderKpis(k) {
+  const fmt = CHARTS.formatCOP;
+
+  document.getElementById('val-ingresos').textContent = fmt(k.ingresos_brutos);
+  document.getElementById('val-ganancia').textContent = fmt(k.ganancia_proyectada);
+  document.getElementById('val-pedidos').textContent  = k.volumen_pedidos ?? '—';
+  document.getElementById('val-tasa').textContent     = k.tasa_entrega != null ? `${k.tasa_entrega}%` : '—';
+
+  document.getElementById('sub-ganancia').textContent =
+    k.ganancia_real > 0
+      ? `Confirmada: ${fmt(k.ganancia_real)}`
+      : 'Proyección (aún no confirmada)';
+
+  document.getElementById('sub-pedidos').textContent =
+    `${k.entregados ?? 0} entregados · ${k.requieren_accion ?? 0} requieren gestión`;
+
+  // Update calls badge
+  const badge = document.getElementById('calls-badge');
+  if (k.requieren_accion > 0) {
+    badge.textContent = k.requieren_accion;
+    badge.classList.remove('hidden');
+  } else {
+    badge.classList.add('hidden');
+  }
+}
+
+function renderProductsTable(products) {
+  const tbody = document.getElementById('table-products-body');
+  if (!products.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty-row">Sin datos</td></tr>';
+    return;
+  }
+  tbody.innerHTML = products.map((p, i) => `
+    <tr>
+      <td style="color:var(--text-3)">${i + 1}</td>
+      <td style="font-weight:500">${p.producto || '—'}</td>
+      <td style="font-variant-numeric:tabular-nums">${p.unidades ?? 0}</td>
+      <td style="color:var(--text-2)">${p.pedidos ?? 0}</td>
+      <td>${CHARTS.formatCOP(p.ingresos)}</td>
+    </tr>`).join('');
+}
+
+/* ═══════════════════════════ FILE UPLOAD ══════════════════════════ */
+function setupUploadHandler(inputId) {
+  document.getElementById(inputId).addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    await doUpload(file);
+    e.target.value = '';
+  });
+}
+setupUploadHandler('file-upload-input');
+
+async function doUpload(file) {
+  const statusEl = document.getElementById('upload-status');
+  const progressWrap = document.getElementById('upload-progress');
+  const progressFill = document.getElementById('progress-fill');
+  const progressLabel = document.getElementById('progress-label');
+
+  statusEl.classList.add('hidden');
+  progressWrap.classList.remove('hidden');
+  progressFill.style.width = '30%';
+  progressLabel.textContent = `Procesando ${file.name}...`;
+
+  try {
+    progressFill.style.width = '70%';
+    const res = await API.uploadFile(file);
+    progressFill.style.width = '100%';
+    progressLabel.textContent = '¡Listo!';
+
+    setTimeout(() => progressWrap.classList.add('hidden'), 800);
+
+    statusEl.className = 'upload-status';
+    statusEl.textContent = `✓ ${res.filename}: ${res.rows_upserted} registros procesados`;
+    statusEl.classList.remove('hidden');
+
+    // Refresh everything
+    loadDashboard();
+    loadCallsPending();
+  } catch (err) {
+    progressWrap.classList.add('hidden');
+    statusEl.className = 'upload-status error';
+    statusEl.textContent = `✗ Error: ${err.message}`;
+    statusEl.classList.remove('hidden');
+  }
+}
+
+
+/* ═══════════════════════════ CALL CENTER ══════════════════════════ */
+document.querySelectorAll('.call-filter-btn').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    state.callFilter = e.target.dataset.filter;
+    document.querySelectorAll('.call-filter-btn').forEach(b => {
+      b.classList.remove('btn-primary');
+      b.classList.add('btn-ghost');
+    });
+    e.target.classList.remove('btn-ghost');
+    e.target.classList.add('btn-primary');
+    if (callsData) renderCalls(callsData);
+  });
+});
+
+let callsData = [];
+
+async function loadCallsPending() {
+  try {
+    const orders = await API.getPendingCalls();
+    callsData = orders;
+    renderCalls(callsData);
+  } catch (err) {
+    document.getElementById('calls-list').innerHTML =
+      `<div class="empty-state">Error al cargar: ${err.message}</div>`;
+  }
+}
+
+document.getElementById('calls-refresh-btn').addEventListener('click', loadCallsPending);
+
+function renderCalls(data) {
+  const container = document.getElementById('calls-list');
+  document.getElementById('calls-badge').textContent = data.length || '';
+  document.getElementById('calls-badge').classList.toggle('hidden', !data.length);
+
+  let filtered = data;
+  if (state.callFilter === 'pending') {
+    filtered = data.filter(o => 
+      !o.ultima_gestion || 
+      (['NO_CONTESTO', 'BUZON', 'OTRO'].includes(o.ultima_gestion) && o.intentos < 2)
+    );
+  } else if (state.callFilter === 'ready') {
+    filtered = data.filter(o => 
+      ['CONTACTADO', 'SOLUCIONADO', 'DEVOLUCION'].includes(o.ultima_gestion) || 
+      o.intentos >= 2
+    );
+  }
+
+  if (!filtered.length) {
+    container.innerHTML = '<div class="empty-state">No hay órdenes en esta categoría.</div>';
+    return;
+  }
+
+  const resultChip = (r) => {
+    if (!r) return '';
+    const map = {
+      CONTACTADO:  'chip-green',
+      SOLUCIONADO: 'chip-green',
+      NO_CONTESTO: 'chip-gray',
+      BUZON:       'chip-gray',
+      DEVOLUCION:  'chip-red',
+      OTRO:        'chip-blue',
+    };
+    return `<span class="chip ${map[r] || 'chip-gray'}">${r}</span>`;
+  };
+
+  const statusChip = (s) => {
+    const map = {
+      'PENDIENTE CONFIRMACION': 'chip-amber',
+      'NOVEDAD':                'chip-red',
+    };
+    return `<span class="chip ${map[s] || 'chip-gray'}">${s}</span>`;
+  };
+
+  container.innerHTML = filtered.map(o => {
+    let dropiWarning = '';
+    if (['CONTACTADO', 'SOLUCIONADO', 'DEVOLUCION'].includes(o.ultima_gestion)) {
+      dropiWarning = `<div style="font-size: 0.75rem; color: var(--amber); margin-top: 6px; font-weight: 600;">⚠️ Falta actualizar estado en Dropi</div>`;
+    } else if (o.intentos >= 2) {
+      dropiWarning = `<div style="font-size: 0.75rem; color: var(--red); margin-top: 6px; font-weight: 600;">🛑 Alcanzó ${o.intentos} intentos. Cancelar orden en Dropi</div>`;
+    }
+
+    return `
+    <div class="call-card ${o.ultima_gestion ? 'has-note' : 'no-note'}" id="call-card-${o.id}">
+      <div class="call-info">
+        <div class="call-name">
+          ${o.nombre_cliente || 'Cliente sin nombre'}
+          ${statusChip(o.estatus)}
+          ${resultChip(o.ultima_gestion)}
+        </div>
+        <div class="call-phone">
+          📞 ${o.telefono || 'Sin teléfono'}
+          <button class="btn-ghost btn-icon" style="padding: 2px 6px; font-size: 14px; margin-left: 4px;" title="Copiar ID para Dropi" onclick="navigator.clipboard.writeText('${o.id}'); alert('ID ${o.id} copiado al portapapeles. ¡Pégalo en Dropi!');">📋 Copiar ID: ${o.id}</button>
+        </div>
+        <div class="call-meta">
+          <span>📦 ${o.producto || '—'} × ${o.cantidad || 1}</span>
+          <span>📍 ${o.ciudad_destino || '—'}, ${o.departamento_destino || '—'}</span>
+          <span>🚚 ${o.transportadora || '—'}</span>
+          <span>💰 ${CHARTS.formatCOP(o.total_orden)}</span>
+          <span>🗓 ${formatIsoDate(o.fecha)}</span>
+        </div>
+        ${o.novedad ? `<div class="call-meta" style="color:var(--amber)">⚠ Novedad: ${o.novedad}</div>` : ''}
+        ${o.ultima_gestion ? `
+          <div class="call-note-preview">
+            <strong>${o.agente}</strong> · ${formatDatetime(o.fecha_gestion)}<br/>
+            ${o.nota_llamada || '(sin notas adicionales)'}
+          </div>
+          ${dropiWarning}
+        ` : ''}
+      </div>
+      <div class="call-actions">
+        ${o.intentos > 0 ? `<div style="font-size: .8rem; color: ${o.intentos >= 2 ? 'var(--red)' : 'var(--text-2)'}; text-align: right; margin-bottom: 4px;">Intentos de llamada: <strong>${o.intentos}</strong></div>` : ''}
+        <button class="btn btn-primary btn-sm" onclick="openCallModal(${JSON.stringify(o).replace(/"/g, '&quot;')})">
+          ${o.ultima_gestion ? '↻ Actualizar' : '📝 Registrar'}
+        </button>
+        <a href="tel:${o.telefono}" class="btn btn-green btn-sm">Llamar</a>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+/* ═══════════════════════════ CALL MODAL ═══════════════════════════ */
+function openCallModal(order) {
+  document.getElementById('modal-order-id').value = order.id;
+  document.getElementById('modal-resultado').value = '';
+  document.getElementById('modal-notas').value = '';
+
+  document.getElementById('modal-order-info').innerHTML = `
+    <strong>${order.nombre_cliente}</strong> — ${order.producto}<br/>
+    <span>📞 ${order.telefono}</span> &nbsp;|&nbsp;
+    <span>📍 ${order.ciudad_destino}</span> &nbsp;|&nbsp;
+    <span>Estado: ${order.estatus}</span>
+    ${order.novedad ? `<br/><span style="color:var(--amber)">⚠ ${order.novedad}</span>` : ''}
+  `;
+
+  document.getElementById('call-modal').classList.remove('hidden');
+}
+
+document.getElementById('modal-close').addEventListener('click', closeModal);
+document.getElementById('modal-cancel-btn').addEventListener('click', closeModal);
+document.getElementById('call-modal').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) closeModal();
+});
+
+function closeModal() {
+  document.getElementById('call-modal').classList.add('hidden');
+}
+
+document.getElementById('call-note-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const orderId  = parseInt(document.getElementById('modal-order-id').value);
+  const resultado = document.getElementById('modal-resultado').value;
+  const notas     = document.getElementById('modal-notas').value.trim();
+
+  const btn = e.target.querySelector('[type=submit]');
+  btn.textContent = 'Guardando...';
+  btn.disabled = true;
+
+  try {
+    await API.saveCallNote(orderId, resultado, notas);
+    closeModal();
+    loadCallsPending();  // refresh list
+    loadDashboard();     // refresh KPIs
+  } catch (err) {
+    alert('Error al guardar: ' + err.message);
+  } finally {
+    btn.textContent = 'Guardar';
+    btn.disabled = false;
+  }
+});
+
+/* ═══════════════════════════ HELPERS ═══════════════════════════════ */
+function formatIsoDate(iso) {
+  if (!iso) return '—';
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+function formatDatetime(dt) {
+  if (!dt) return '—';
+  return dt.replace('T', ' ').substring(0, 16);
+}
+
+/* ═══════════════════════════ USERS MANAGEMENT ═════════════════════ */
+async function loadUsers() {
+  try {
+    const users = await API.listUsers();
+    const tbody = document.getElementById('users-body');
+    if (!users.length) {
+      tbody.innerHTML = '<tr><td colspan="3" class="empty-row">No hay usuarios</td></tr>';
+      return;
+    }
+
+    const roleMap = { admin: 'Administrador', agent: 'Agente' };
+    const roleColor = (r) => r === 'admin' ? 'color:var(--violet-light)' : 'color:var(--text-1)';
+
+    tbody.innerHTML = users.map(u => `
+      <tr>
+        <td style="color:var(--text-3)">#${u.id}</td>
+        <td style="font-weight:500">${u.username}</td>
+        <td style="${roleColor(u.role)}">${roleMap[u.role] || u.role}</td>
+      </tr>`).join('');
+  } catch (err) {
+    document.getElementById('users-body').innerHTML = `<tr><td colspan="3" class="empty-row">Error al cargar</td></tr>`;
+  }
+}
+
+document.getElementById('create-user-form')?.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const username = document.getElementById('new-user-name').value.trim();
+  const password = document.getElementById('new-user-pass').value;
+  const role = document.getElementById('new-user-role').value;
+  const msgEl = document.getElementById('new-user-msg');
+  const btn = e.target.querySelector('[type=submit]');
+
+  btn.disabled = true;
+  msgEl.classList.add('hidden');
+
+  try {
+    await API.createUser(username, password, role);
+    msgEl.textContent = '¡Usuario creado exitosamente!';
+    msgEl.style.color = 'var(--green)';
+    msgEl.classList.remove('hidden');
+    e.target.reset();
+    loadUsers();
+  } catch (err) {
+    msgEl.textContent = err.message;
+    msgEl.style.color = 'var(--red)';
+    msgEl.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+  }
+});
