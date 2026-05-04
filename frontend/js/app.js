@@ -189,7 +189,6 @@ async function loadDashboard() {
 function renderKpis(k) {
   const fmt = CHARTS.formatCOP;
 
-  document.getElementById('val-ingresos').textContent    = fmt(k.ingresos_brutos);
   document.getElementById('val-ganancia').textContent    = fmt(k.ganancia_proyectada);
   document.getElementById('val-confirmada').textContent  = fmt(k.ganancia_real || 0);
   document.getElementById('val-ads').textContent         = fmt(k.ad_spend || 0);
