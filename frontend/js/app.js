@@ -324,35 +324,23 @@ setupUploadHandler('upload-meta');
 
 async function doUpload(file) {
   const statusEl = document.getElementById('upload-status');
-  const progressWrap = document.getElementById('upload-progress');
-  const progressFill = document.getElementById('progress-fill');
-  const progressLabel = document.getElementById('progress-label');
 
-  statusEl.classList.add('hidden');
-  progressWrap.classList.remove('hidden');
-  progressFill.style.width = '30%';
-  progressLabel.textContent = `Procesando ${file.name}...`;
+  statusEl.className = 'upload-status';
+  statusEl.textContent = `Procesando ${file.name}...`;
+  statusEl.classList.remove('hidden');
 
   try {
-    progressFill.style.width = '70%';
     const res = await API.uploadFile(file);
-    progressFill.style.width = '100%';
-    progressLabel.textContent = '¡Listo!';
-
-    setTimeout(() => progressWrap.classList.add('hidden'), 800);
 
     statusEl.className = 'upload-status';
     statusEl.textContent = `✓ ${res.filename}: ${res.rows_upserted} registros procesados`;
-    statusEl.classList.remove('hidden');
-
+    
     // Refresh everything
     loadDashboard();
     loadCallsPending();
   } catch (err) {
-    progressWrap.classList.add('hidden');
     statusEl.className = 'upload-status error';
     statusEl.textContent = `✗ Error: ${err.message}`;
-    statusEl.classList.remove('hidden');
   }
 }
 
