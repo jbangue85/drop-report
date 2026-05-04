@@ -136,25 +136,27 @@ def parse_meta_csv(file_bytes: bytes, filename: str) -> List[Dict[str, Any]]:
     import csv
     import io
     
-    text = file_bytes.decode('utf-8', errors='replace')
+    text = file_bytes.decode('utf-8-sig', errors='replace')
     reader = csv.DictReader(io.StringIO(text))
     
     records = []
     for row in reader:
-        # Check if this row looks like a Meta Ads row
-        if "Inicio del informe" not in row or "Importe gastado (COP)" not in row:
+        # Find the spend column which might have different currencies like (COP) or (USD)
+        spend_col = next((col for col in row.keys() if col and "Importe gastado" in col), None)
+        
+        if "Inicio del informe" not in row or not spend_col:
             continue
             
         fecha = row.get("Inicio del informe", "").strip()
         campaign = row.get("Nombre de la campaña", "").strip()
-        spend_str = row.get("Importe gastado (COP)", "0").strip()
+        spend_str = row[spend_col].strip() if row.get(spend_col) else "0"
         results_str = row.get("Resultados", "0").strip()
         
         if not fecha or not campaign:
             continue
             
         try:
-            spend = float(spend_str) if spend_str else 0.0
+            spend = float(spend_str.replace(',', '.')) if spend_str else 0.0
         except ValueError:
             spend = 0.0
             

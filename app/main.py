@@ -104,13 +104,13 @@ async def upload_file(
     file: UploadFile = File(...),
     user=Depends(get_current_user),
 ):
-    if not file.filename.endswith((".xlsx", ".xls", ".csv")):
+    if not file.filename.lower().endswith((".xlsx", ".xls", ".csv")):
         raise HTTPException(status_code=400, detail="Solo se aceptan archivos .xlsx o .csv")
     content = await file.read()
     
     conn = get_db()
     
-    if file.filename.endswith(".csv"):
+    if file.filename.lower().endswith(".csv"):
         from app.parser import parse_meta_csv, upsert_meta_spend
         records = parse_meta_csv(content, file.filename)
         if not records:
