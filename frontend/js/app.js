@@ -195,6 +195,9 @@ function renderKpis(k) {
   document.getElementById('val-pedidos').textContent     = k.volumen_pedidos ?? '—';
   document.getElementById('val-tasa').textContent        = k.tasa_entrega != null ? `${k.tasa_entrega}%` : '—';
 
+  document.getElementById('sub-ads').textContent = 
+    `Inversión Meta Ads ${k.ads_iva > 0 ? `(+${k.ads_iva.toFixed(0)}% IVA)` : ''}`;
+
   document.getElementById('sub-pedidos').textContent =
     `${k.entregados ?? 0} entregados · ${k.requieren_accion ?? 0} requieren gestión`;
 

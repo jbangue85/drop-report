@@ -1,5 +1,12 @@
 import sqlite3
+import os
 from typing import Optional
+
+def _get_iva_factor():
+    try:
+        return 1.0 + float(os.environ.get("ADS_IVA", "0"))
+    except ValueError:
+        return 1.0
 
 
 # Status groups
@@ -58,13 +65,17 @@ def calc_kpis(conn: sqlite3.Connection, date_from=None, date_to=None, estatus=No
     # Get ad spend (ignore estatus for ad spend)
     spend_where, spend_params = _where(date_from, date_to)
     spend_row = conn.execute(f"SELECT COALESCE(SUM(spend), 0) as total_spend FROM meta_ads_spend {spend_where}", spend_params).fetchone()
-    total_spend = spend_row["total_spend"] if spend_row else 0
+    raw_spend = spend_row["total_spend"] if spend_row else 0
+    
+    iva_factor = _get_iva_factor()
+    total_spend = raw_spend * iva_factor
 
     kpis = dict(row) if row else {}
     if kpis:
         kpis["margen_bruto"] = kpis["ganancia_proyectada"] # Save raw margin
         kpis["ganancia_proyectada"] -= total_spend
         kpis["ad_spend"] = total_spend
+        kpis["ads_iva"] = (iva_factor - 1.0) * 100
     return kpis
 
 
@@ -98,7 +109,8 @@ def calc_daily_trend(conn, date_from=None, date_to=None) -> list:
     """, params).fetchall()
     
     spend_rows = conn.execute(f"SELECT fecha, COALESCE(SUM(spend), 0) as spend FROM meta_ads_spend {where} GROUP BY fecha", params).fetchall()
-    spend_dict = {r["fecha"]: r["spend"] for r in spend_rows}
+    iva_factor = _get_iva_factor()
+    spend_dict = {r["fecha"]: r["spend"] * iva_factor for r in spend_rows}
     
     results = {}
     for r in orders_rows:
@@ -158,7 +170,8 @@ def calc_daily_control(conn, date_from=None, date_to=None) -> list:
     spend_rows = conn.execute(spend_query, params).fetchall()
     
     # dict key is (fecha, producto)
-    spend_dict = {(r["fecha"], r["producto"]): r["spend"] for r in spend_rows}
+    iva_factor = _get_iva_factor()
+    spend_dict = {(r["fecha"], r["producto"]): r["spend"] * iva_factor for r in spend_rows}
     
     results = {}
     for r in orders_rows:
