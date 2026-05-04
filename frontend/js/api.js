@@ -77,6 +77,9 @@ const API = (() => {
     getCarriersChart: (params = {}) =>
       request('GET', '/api/charts/carriers' + toQuery(params)),
 
+    getDailyControl: (params = {}) =>
+      request('GET', '/api/daily-control' + toQuery(params)),
+
     getFilterOptions: () =>
       request('GET', '/api/filters/options'),
 

@@ -104,14 +104,25 @@ async def upload_file(
     file: UploadFile = File(...),
     user=Depends(get_current_user),
 ):
-    if not file.filename.endswith((".xlsx", ".xls")):
-        raise HTTPException(status_code=400, detail="Solo se aceptan archivos .xlsx")
+    if not file.filename.endswith((".xlsx", ".xls", ".csv")):
+        raise HTTPException(status_code=400, detail="Solo se aceptan archivos .xlsx o .csv")
     content = await file.read()
-    records = parse_xlsx(content, file.filename)
-    if not records:
-        raise HTTPException(status_code=422, detail="El archivo no contiene datos válidos")
+    
     conn = get_db()
-    count = upsert_records(conn, records)
+    
+    if file.filename.endswith(".csv"):
+        from app.parser import parse_meta_csv, upsert_meta_spend
+        records = parse_meta_csv(content, file.filename)
+        if not records:
+            raise HTTPException(status_code=422, detail="El CSV no contiene datos válidos de Meta Ads")
+        count = upsert_meta_spend(conn, records)
+    else:
+        from app.parser import parse_xlsx, upsert_records
+        records = parse_xlsx(content, file.filename)
+        if not records:
+            raise HTTPException(status_code=422, detail="El archivo Excel no contiene datos válidos")
+        count = upsert_records(conn, records)
+
     conn.execute(
         "INSERT INTO uploads (filename, rows_upserted) VALUES (?, ?)",
         (file.filename, count),
@@ -169,6 +180,19 @@ def chart_trend(
 ):
     conn = get_db()
     result = calc_daily_trend(conn, date_from, date_to)
+    conn.close()
+    return result
+
+
+@app.get("/api/daily-control")
+def daily_control(
+    date_from: Optional[str] = Query(None),
+    date_to: Optional[str] = Query(None),
+    user=Depends(get_current_user),
+):
+    from app.analytics import calc_daily_control
+    conn = get_db()
+    result = calc_daily_control(conn, date_from, date_to)
     conn.close()
     return result
 

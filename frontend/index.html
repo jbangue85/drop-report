@@ -56,6 +56,10 @@
         <span>Panel de Llamadas</span>
         <span id="calls-badge" class="badge hidden">0</span>
       </a>
+      <a href="#" class="nav-item" data-tab="control" id="nav-control">
+        <span class="nav-icon">📈</span>
+        <span>Control Diario</span>
+      </a>
       <a href="#" class="nav-item hidden" data-tab="users" id="nav-users">
         <span class="nav-icon">👥</span>
         <span>Usuarios</span>
@@ -101,9 +105,9 @@
         </div>
         <!-- Upload button -->
         <label for="file-upload-input" class="btn btn-primary btn-sm" id="upload-btn-label">
-          ⬆ Subir XLSX
+          ⬆ Subir Datos (Dropi/Meta)
         </label>
-        <input type="file" id="file-upload-input" accept=".xlsx,.xls" class="hidden" />
+        <input type="file" id="file-upload-input" accept=".xlsx,.xls,.csv" class="hidden" />
         <div id="upload-status" class="upload-status hidden"></div>
       </div>
     </header>
@@ -211,6 +215,38 @@
 
       <div id="calls-list" class="calls-list">
         <div class="empty-state">Cargando...</div>
+      </div>
+    </section>
+
+    <!-- ══════════════ CONTROL DIARIO TAB ══════════════ -->
+    <section id="tab-control" class="tab-content hidden">
+      <div class="calls-header">
+        <div>
+          <h3>Control Diario de Operaciones</h3>
+          <p class="calls-sub">Monitorea tus pedidos, rentabilidad y gasto de Meta Ads día a día.</p>
+        </div>
+      </div>
+      
+      <div class="chart-card table-wrap" style="max-height: 70vh;">
+        <table class="data-table" id="control-table">
+          <thead>
+            <tr>
+              <th>Día</th>
+              <th>Ventas</th>
+              <th>Efectivas</th>
+              <th>Dev. / Canc.</th>
+              <th>Ingresos</th>
+              <th>Margen Bruto</th>
+              <th>Gasto Meta</th>
+              <th>CPA</th>
+              <th>Utilidad Total</th>
+              <th>ROI</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Generado por JS -->
+          </tbody>
+        </table>
       </div>
     </section>
 

@@ -87,7 +87,7 @@ function switchTab(tab) {
   document.querySelectorAll('.nav-item').forEach(l => l.classList.toggle('active', l.dataset.tab === tab));
   document.querySelectorAll('.tab-content').forEach(s => s.classList.toggle('hidden', s.id !== `tab-${tab}`));
   document.getElementById('page-title').textContent =
-    { dashboard: 'Dashboard', calls: 'Panel de Llamadas', users: 'Gestión de Usuarios' }[tab];
+    { dashboard: 'Dashboard', calls: 'Panel de Llamadas', users: 'Gestión de Usuarios', control: 'Control Diario' }[tab];
 
   if (tab === 'users') {
     loadUsers();
@@ -161,12 +161,13 @@ async function loadDashboard() {
   const params = { date_from: f.date_from, date_to: f.date_to, estatus: f.estatus };
 
   try {
-    const [kpis, status, trend, products, carriers] = await Promise.all([
+    const [kpis, status, trend, products, carriers, daily] = await Promise.all([
       API.getKpis(params),
       API.getStatusChart({ date_from: f.date_from, date_to: f.date_to }),
       API.getTrendChart({ date_from: f.date_from, date_to: f.date_to }),
       API.getProductsChart({ date_from: f.date_from, date_to: f.date_to }),
       API.getCarriersChart({ date_from: f.date_from, date_to: f.date_to }),
+      API.getDailyControl({ date_from: f.date_from, date_to: f.date_to }),
     ]);
 
     renderKpis(kpis);
@@ -174,6 +175,7 @@ async function loadDashboard() {
     CHARTS.renderTrend(trend);
     renderProductsTable(products);
     CHARTS.renderCarriers(carriers);
+    renderDailyControl(daily);
 
     document.getElementById('last-updated').textContent =
       'Actualizado: ' + new Date().toLocaleTimeString('es-CO');
@@ -190,10 +192,9 @@ function renderKpis(k) {
   document.getElementById('val-pedidos').textContent  = k.volumen_pedidos ?? '—';
   document.getElementById('val-tasa').textContent     = k.tasa_entrega != null ? `${k.tasa_entrega}%` : '—';
 
-  document.getElementById('sub-ganancia').textContent =
-    k.ganancia_real > 0
-      ? `Confirmada: ${fmt(k.ganancia_real)}`
-      : 'Proyección (aún no confirmada)';
+  document.getElementById('sub-ganancia').innerHTML =
+    (k.ganancia_real > 0 ? `Confirmada: ${fmt(k.ganancia_real)}<br/>` : '') +
+    `Gasto en Ads: <strong style="color:var(--amber)">${fmt(k.ad_spend || 0)}</strong>`;
 
   document.getElementById('sub-pedidos').textContent =
     `${k.entregados ?? 0} entregados · ${k.requieren_accion ?? 0} requieren gestión`;
@@ -206,6 +207,34 @@ function renderKpis(k) {
   } else {
     badge.classList.add('hidden');
   }
+}
+
+function renderDailyControl(data) {
+  const tbody = document.querySelector('#control-table tbody');
+  if (!data || data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="10" class="empty-row">No hay datos en el período</td></tr>';
+    return;
+  }
+  
+  const fmt = CHARTS.formatCOP;
+  const fmtPct = (val) => (val * 100).toFixed(1) + '%';
+  
+  tbody.innerHTML = data.map(r => `
+    <tr>
+      <td>${r.fecha}</td>
+      <td>${r.total_pedidos}</td>
+      <td>${r.entregados}</td>
+      <td>${r.devoluciones} / ${r.cancelados}</td>
+      <td>${fmt(r.ingresos_brutos)}</td>
+      <td>${fmt(r.margen_bruto)}</td>
+      <td style="color: var(--amber)">${fmt(r.ad_spend)}</td>
+      <td>${fmt(r.cpa)}</td>
+      <td style="color: ${r.utilidad_total >= 0 ? 'var(--green)' : 'var(--red)'}; font-weight: 600;">
+        ${fmt(r.utilidad_total)}
+      </td>
+      <td>${fmtPct(r.roi)}</td>
+    </tr>
+  `).join('');
 }
 
 function renderProductsTable(products) {

@@ -129,3 +129,64 @@ def upsert_records(conn, records: List[Dict[str, Any]]) -> int:
     conn.executemany(sql, data)
     conn.commit()
     return len(records)
+
+
+def parse_meta_csv(file_bytes: bytes, filename: str) -> List[Dict[str, Any]]:
+    """Parse Meta Ads CSV bytes → list of dicts for meta_ads_spend table."""
+    import csv
+    import io
+    
+    text = file_bytes.decode('utf-8', errors='replace')
+    reader = csv.DictReader(io.StringIO(text))
+    
+    records = []
+    for row in reader:
+        # Check if this row looks like a Meta Ads row
+        if "Inicio del informe" not in row or "Importe gastado (COP)" not in row:
+            continue
+            
+        fecha = row.get("Inicio del informe", "").strip()
+        campaign = row.get("Nombre de la campaña", "").strip()
+        spend_str = row.get("Importe gastado (COP)", "0").strip()
+        results_str = row.get("Resultados", "0").strip()
+        
+        if not fecha or not campaign:
+            continue
+            
+        try:
+            spend = float(spend_str) if spend_str else 0.0
+        except ValueError:
+            spend = 0.0
+            
+        try:
+            results = int(results_str) if results_str else 0
+        except ValueError:
+            results = 0
+            
+        if spend > 0 or results > 0:
+            records.append({
+                "fecha": fecha,
+                "campaign_name": campaign,
+                "spend": spend,
+                "results": results
+            })
+            
+    return records
+
+
+def upsert_meta_spend(conn, records: List[Dict[str, Any]]) -> int:
+    """INSERT OR REPLACE meta ads spend. Returns count inserted/updated."""
+    if not records:
+        return 0
+
+    sql = """
+        INSERT OR REPLACE INTO meta_ads_spend 
+        (fecha, campaign_name, spend, results) 
+        VALUES (?, ?, ?, ?)
+    """
+    
+    data = [(r["fecha"], r["campaign_name"], r["spend"], r["results"]) for r in records]
+    conn.executemany(sql, data)
+    conn.commit()
+    return len(records)
+

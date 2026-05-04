@@ -53,7 +53,17 @@ def calc_kpis(conn: sqlite3.Connection, date_from=None, date_to=None, estatus=No
         FROM orders {where}
     """, params).fetchone()
 
-    return dict(row) if row else {}
+    # Get ad spend (ignore estatus for ad spend)
+    spend_where, spend_params = _where(date_from, date_to)
+    spend_row = conn.execute(f"SELECT COALESCE(SUM(spend), 0) as total_spend FROM meta_ads_spend {spend_where}", spend_params).fetchone()
+    total_spend = spend_row["total_spend"] if spend_row else 0
+
+    kpis = dict(row) if row else {}
+    if kpis:
+        kpis["margen_bruto"] = kpis["ganancia_proyectada"] # Save raw margin
+        kpis["ganancia_proyectada"] -= total_spend
+        kpis["ad_spend"] = total_spend
+    return kpis
 
 
 # ── Charts ───────────────────────────────────────────────────────────────────
@@ -71,7 +81,7 @@ def calc_status_distribution(conn, date_from=None, date_to=None) -> list:
 
 def calc_daily_trend(conn, date_from=None, date_to=None) -> list:
     where, params = _where(date_from, date_to)
-    rows = conn.execute(f"""
+    orders_rows = conn.execute(f"""
         SELECT
             fecha,
             COUNT(*) AS pedidos,
@@ -83,9 +93,95 @@ def calc_daily_trend(conn, date_from=None, date_to=None) -> list:
             ), 0) AS ganancia
         FROM orders {where}
         GROUP BY fecha
-        ORDER BY fecha ASC
     """, params).fetchall()
-    return [dict(r) for r in rows]
+    
+    spend_rows = conn.execute(f"SELECT fecha, COALESCE(SUM(spend), 0) as spend FROM meta_ads_spend {where} GROUP BY fecha", params).fetchall()
+    spend_dict = {r["fecha"]: r["spend"] for r in spend_rows}
+    
+    results = {}
+    for r in orders_rows:
+        fecha = r["fecha"]
+        results[fecha] = {
+            "fecha": fecha,
+            "pedidos": r["pedidos"],
+            "ingresos": r["ingresos"],
+            "ganancia": r["ganancia"] - spend_dict.get(fecha, 0)
+        }
+        
+    for r in spend_rows:
+        fecha = r["fecha"]
+        if fecha not in results:
+            results[fecha] = {
+                "fecha": fecha,
+                "pedidos": 0,
+                "ingresos": 0,
+                "ganancia": -r["spend"]
+            }
+            
+    return sorted(list(results.values()), key=lambda x: x["fecha"], reverse=False)
+
+
+def calc_daily_control(conn, date_from=None, date_to=None) -> list:
+    where, params = _where(date_from, date_to)
+    
+    orders_query = f"""
+        SELECT 
+            fecha,
+            COUNT(*) AS total_pedidos,
+            COUNT(CASE WHEN estatus = 'ENTREGADO' THEN 1 END) AS entregados,
+            COUNT(CASE WHEN estatus = 'CANCELADO' THEN 1 END) AS cancelados,
+            COUNT(CASE WHEN estatus = 'DEVOLUCION' THEN 1 END) AS devoluciones,
+            COALESCE(SUM(total_orden), 0) AS ingresos_brutos,
+            COALESCE(SUM(
+                CASE WHEN ganancia IS NULL
+                THEN total_orden - COALESCE(precio_proveedor_x_cantidad,0) - COALESCE(precio_flete,0)
+                ELSE ganancia END
+            ), 0) AS margen_bruto
+        FROM orders {where}
+        GROUP BY fecha
+    """
+    orders_rows = conn.execute(orders_query, params).fetchall()
+    
+    spend_query = f"SELECT fecha, COALESCE(SUM(spend), 0) as spend FROM meta_ads_spend {where} GROUP BY fecha"
+    spend_rows = conn.execute(spend_query, params).fetchall()
+    spend_dict = {r["fecha"]: r["spend"] for r in spend_rows}
+    
+    results = {}
+    for r in orders_rows:
+        fecha = r["fecha"]
+        spend = spend_dict.get(fecha, 0)
+        margen = r["margen_bruto"]
+        utilidad_total = margen - spend
+        
+        roi = (utilidad_total / spend) if spend > 0 else 0
+        cpa = (spend / r["total_pedidos"]) if r["total_pedidos"] > 0 else 0
+        
+        results[fecha] = {
+            "fecha": fecha,
+            "total_pedidos": r["total_pedidos"],
+            "entregados": r["entregados"],
+            "cancelados": r["cancelados"],
+            "devoluciones": r["devoluciones"],
+            "ingresos_brutos": r["ingresos_brutos"],
+            "margen_bruto": margen,
+            "ad_spend": spend,
+            "cpa": cpa,
+            "utilidad_total": utilidad_total,
+            "roi": roi
+        }
+        
+    for r in spend_rows:
+        fecha = r["fecha"]
+        if fecha not in results:
+            spend = r["spend"]
+            results[fecha] = {
+                "fecha": fecha,
+                "total_pedidos": 0, "entregados": 0, "cancelados": 0, "devoluciones": 0,
+                "ingresos_brutos": 0, "margen_bruto": 0,
+                "ad_spend": spend, "cpa": 0, "utilidad_total": -spend, "roi": -1
+            }
+            
+    return sorted(list(results.values()), key=lambda x: x["fecha"], reverse=True)
 
 
 def calc_product_ranking(conn, date_from=None, date_to=None, limit=15) -> list:

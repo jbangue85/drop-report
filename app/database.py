@@ -93,6 +93,17 @@ CREATE TABLE IF NOT EXISTS users (
 );
 """
 
+CREATE_META_ADS_SPEND = """
+CREATE TABLE IF NOT EXISTS meta_ads_spend (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    fecha         TEXT NOT NULL,
+    campaign_name TEXT NOT NULL,
+    spend         REAL DEFAULT 0,
+    results       INTEGER DEFAULT 0,
+    uploaded_at   TEXT DEFAULT (datetime('now')),
+    UNIQUE(fecha, campaign_name)
+);
+"""
 
 def get_db() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH)
@@ -108,6 +119,7 @@ def init_db():
     conn.execute(CREATE_UPLOADS)
     conn.execute(CREATE_CALL_NOTES)
     conn.execute(CREATE_USERS)
+    conn.execute(CREATE_META_ADS_SPEND)
     conn.commit()
     conn.close()
 
