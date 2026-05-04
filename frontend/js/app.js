@@ -237,11 +237,16 @@ function renderDailyControl(data) {
   
   const fmt = CHARTS.formatCOP;
   const fmtPct = (val) => (val != null && isFinite(val) ? (val * 100).toFixed(1) : '0.0') + '%';
+  const fmtDate = (iso) => {
+    if (!iso || !iso.includes('-')) return iso || '—';
+    const [y, m, d] = iso.split('-');
+    return `${d}/${m}/${y}`;
+  };
 
   // Build rows (no Efectivas column)
   const rows = data.map(r => `
     <tr>
-      <td>${r.fecha}</td>
+      <td>${fmtDate(r.fecha)}</td>
       <td title="${r.producto}" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
         ${r.producto}
       </td>

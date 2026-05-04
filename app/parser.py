@@ -147,7 +147,23 @@ def parse_meta_csv(file_bytes: bytes, filename: str) -> List[Dict[str, Any]]:
         if "Inicio del informe" not in row or not spend_col:
             continue
             
-        fecha = row.get("Inicio del informe", "").strip()
+        fecha_raw = row.get("Inicio del informe", "").strip()
+        # Handle various Meta date formats (YYYY-MM-DD, DD/MM/YYYY, etc.)
+        fecha = fecha_raw
+        if "/" in fecha_raw:
+            parts = fecha_raw.split("/")
+            if len(parts) == 3:
+                # If first part is 4 digits, it's likely YYYY/MM/DD
+                if len(parts[0]) == 4:
+                    fecha = f"{parts[0]}-{parts[1]}-{parts[2]}"
+                # Else assume DD/MM/YYYY
+                else:
+                    fecha = f"{parts[2]}-{parts[1]}-{parts[0]}"
+        elif len(fecha_raw) == 10 and fecha_raw[2] == "-":
+            # DD-MM-YYYY -> YYYY-MM-DD
+            d, m, y = fecha_raw.split("-")
+            fecha = f"{y}-{m}-{d}"
+            
         campaign = row.get("Nombre de la campaña", "").strip()
         spend_str = row[spend_col].strip() if row.get(spend_col) else "0"
         results_str = row.get("Resultados", "0").strip()
