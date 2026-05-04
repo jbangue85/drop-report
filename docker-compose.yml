@@ -7,7 +7,7 @@ services:
     container_name: drop-report
 
     ports:
-      - "8000:8000"
+      - "8080:8000"
 
     # ── Persistent data ──────────────────────────────────────────────
     # Bind mount: ./data on the HOST maps to /data inside the container.
