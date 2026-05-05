@@ -144,9 +144,6 @@ document.getElementById('filter-preset').addEventListener('change', (e) => {
     df.classList.remove('hidden');
     dt.classList.remove('hidden');
     return;
-  } else {
-    state.filters.date_from = null;
-    state.filters.date_to   = null;
   }
 
   loadDashboard();
