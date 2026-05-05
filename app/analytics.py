@@ -54,6 +54,7 @@ PROJECTED_ORDER_MARGIN_SQL = f"""
 CONFIRMED_ORDER_MARGIN_SQL = f"""
     CASE
         WHEN estatus = 'ENTREGADO' THEN {KNOWN_ORDER_MARGIN_SQL}
+        WHEN estatus IN ('DEVOLUCION', 'DEVOLUCION EN BODEGA') THEN -COALESCE(precio_proveedor_x_cantidad, 0) - COALESCE(precio_flete, 0) - COALESCE(costo_devolucion_flete, 0)
         ELSE 0
     END
 """

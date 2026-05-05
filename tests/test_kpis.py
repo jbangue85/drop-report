@@ -42,7 +42,7 @@ class KpiTests(unittest.TestCase):
         self.assertEqual(kpis["tasa_devolucion"], 50.0)
         self.assertEqual(kpis["tasa_cierre_logistico"], 100.0)
 
-    def test_confirmed_profit_uses_only_delivered_orders(self):
+    def test_confirmed_profit_counts_deliveries_and_returns(self):
         self.conn.executemany(
             """
             INSERT INTO orders
@@ -66,7 +66,7 @@ class KpiTests(unittest.TestCase):
 
         kpis = calc_kpis(self.conn, "2026-05-02", "2026-05-02")
 
-        self.assertEqual(kpis["ganancia_real"], 35000)
+        self.assertEqual(kpis["ganancia_real"], -10000)
         self.assertEqual(kpis["ganancia_proyectada"], -10000)
 
     def test_projected_profit_includes_return_shipping_cost(self):
