@@ -104,7 +104,6 @@ const CHARTS = (() => {
     const labels      = data.map(d => formatDateLabel(d.fecha));
     const despachados = data.map(d => d.despachados);
     const entregados  = data.map(d => d.entregados);
-    const tasas       = data.map(d => d.tasa_entrega);
 
     instances['trend'] = new Chart(ctx, {
       type: 'line',
@@ -134,20 +133,7 @@ const CHARTS = (() => {
             tension: 0.3,
             fill: true,
             yAxisID: 'y',
-          },
-          {
-            label: 'Tasa %',
-            data: tasas,
-            backgroundColor: 'transparent',
-            borderColor: '#f59e0b',
-            borderWidth: 2,
-            borderDash: [5, 5],
-            pointBackgroundColor: '#f59e0b',
-            pointRadius: 3,
-            tension: 0.3,
-            fill: false,
-            yAxisID: 'y1',
-          },
+          }
         ],
       },
       options: {
@@ -160,27 +146,13 @@ const CHARTS = (() => {
             title: { display: true, text: 'Cantidad de Pedidos', color: '#94a3b8' },
             grid: { color: 'rgba(255,255,255,0.04)' },
             beginAtZero: true,
-          },
-          y1: {
-            title: { display: true, text: 'Tasa Entrega (%)', color: '#f59e0b' },
-            position: 'right',
-            min: 0,
-            max: 100,
-            grid: { drawOnChartArea: false },
-            ticks: {
-              callback: (v) => `${v}%`,
-            },
-          },
+          }
         },
         plugins: {
           legend: { position: 'top', labels: { boxWidth: 12, padding: 16 } },
           tooltip: {
             callbacks: {
-              label: (ctx) => {
-                const val = ctx.parsed.y;
-                if (ctx.dataset.label === 'Tasa %') return ` ${ctx.dataset.label}: ${val}%`;
-                return ` ${ctx.dataset.label}: ${val} pedidos`;
-              },
+              label: (ctx) => ` ${ctx.dataset.label}: ${ctx.parsed.y} pedidos`,
             },
           },
         },
