@@ -38,7 +38,8 @@ class KpiTests(unittest.TestCase):
         self.assertEqual(kpis["devoluciones"], 2)
         self.assertEqual(kpis["cancelados"], 1)
         self.assertEqual(kpis["en_curso_logistico"], 0)
-        self.assertEqual(kpis["tasa_entrega"], 40.0)
+        self.assertEqual(kpis["tasa_cancelacion"], 20.0)
+        self.assertEqual(kpis["tasa_entrega"], 50.0)
         self.assertEqual(kpis["tasa_devolucion"], 50.0)
         self.assertEqual(kpis["tasa_cierre_logistico"], 100.0)
 

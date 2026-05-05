@@ -238,6 +238,7 @@ function renderKpis(k) {
   document.getElementById('val-pedidos').textContent     = k.volumen_pedidos ?? '—';
   document.getElementById('val-tasa').textContent        = k.tasa_entrega != null ? `${k.tasa_entrega}%` : '—';
   document.getElementById('val-devolucion').textContent  = k.tasa_devolucion != null ? `${k.tasa_devolucion}%` : '—';
+  document.getElementById('val-cancelacion').textContent = k.tasa_cancelacion != null ? `${k.tasa_cancelacion}%` : '—';
   document.getElementById('val-cierre').textContent      = k.tasa_cierre_logistico != null ? `${k.tasa_cierre_logistico}%` : '—';
 
   // Dynamic colors
@@ -262,9 +263,11 @@ function renderKpis(k) {
   document.getElementById('sub-pedidos').textContent =
     `${k.entregados ?? 0} entregados · ${k.requieren_accion ?? 0} requieren gestión`;
   document.getElementById('sub-tasa').textContent =
-    `${k.entregados ?? 0} entregados / ${(k.entregados ?? 0) + (k.devoluciones ?? 0) + (k.cancelados ?? 0)} finalizados`;
+    `${k.entregados ?? 0} entregados / ${(k.entregados ?? 0) + (k.devoluciones ?? 0)} cierres logísticos`;
   document.getElementById('sub-devolucion').textContent =
     `${k.devoluciones ?? 0} devoluciones / ${(k.entregados ?? 0) + (k.devoluciones ?? 0)} cierres logísticos`;
+  document.getElementById('sub-cancelacion').textContent =
+    `${k.cancelados ?? 0} cancelados / ${k.volumen_pedidos ?? 0} pedidos totales`;
   document.getElementById('sub-cierre').textContent =
     `${k.en_curso_logistico ?? 0} en curso / ${Math.max((k.volumen_pedidos ?? 0) - (k.cancelados ?? 0), 0)} no cancelados`;
 
