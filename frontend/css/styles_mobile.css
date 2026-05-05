@@ -404,6 +404,20 @@ input, select, textarea { font-family: inherit; }
   border-bottom: 1px solid rgba(255,255,255,.04);
   color: var(--text-1);
 }
+.table-input {
+  width: 100%;
+  min-width: 90px;
+  background: rgba(255,255,255,.03);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-1);
+  padding: .45rem .55rem;
+  font-size: .8rem;
+}
+.table-input:focus {
+  outline: none;
+  border-color: var(--border-focus);
+}
 .data-table tr:last-child td { border-bottom: none; }
 .data-table tr:hover td { background: var(--bg-card-hover); }
 .empty-row { color: var(--text-3); text-align: center; padding: 2rem !important; }

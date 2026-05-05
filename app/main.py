@@ -18,6 +18,7 @@ from .analytics import (
     calc_daily_trend,
     calc_product_ranking,
     calc_carrier_performance,
+    get_projection_configs,
     get_action_orders,
     get_filter_options,
 )
@@ -78,6 +79,14 @@ def login(body: LoginRequest):
 class ChangePasswordRequest(BaseModel):
     old_password: str
     new_password: str
+
+
+class ProjectionConfigRequest(BaseModel):
+    producto: str
+    pct_devolucion: float
+    flete_base_dev: float
+    precio_venta: float
+    costo_proveedor: float
 
 
 @app.post("/api/auth/change-password")
@@ -268,6 +277,48 @@ def filter_options(user=Depends(get_current_user)):
     result = get_filter_options(conn)
     conn.close()
     return result
+
+
+@app.get("/api/projection-configs")
+def projection_configs(user=Depends(get_current_user)):
+    conn = get_db()
+    result = get_projection_configs(conn)
+    conn.close()
+    return result
+
+
+@app.post("/api/projection-configs")
+def save_projection_config(body: ProjectionConfigRequest, admin=Depends(require_admin)):
+    producto = body.producto.strip()
+    if not producto:
+        raise HTTPException(status_code=400, detail="Falta producto")
+    if body.pct_devolucion < 0 or body.pct_devolucion >= 1:
+        raise HTTPException(status_code=400, detail="pct_devolucion debe estar entre 0 y 1")
+
+    conn = get_db()
+    conn.execute(
+        """
+        INSERT INTO product_projection_config
+            (producto, pct_devolucion, flete_base_dev, precio_venta, costo_proveedor, updated_at)
+        VALUES (?, ?, ?, ?, ?, datetime('now'))
+        ON CONFLICT(producto) DO UPDATE SET
+            pct_devolucion = excluded.pct_devolucion,
+            flete_base_dev = excluded.flete_base_dev,
+            precio_venta = excluded.precio_venta,
+            costo_proveedor = excluded.costo_proveedor,
+            updated_at = datetime('now')
+        """,
+        (
+            producto,
+            body.pct_devolucion,
+            body.flete_base_dev,
+            body.precio_venta,
+            body.costo_proveedor,
+        ),
+    )
+    conn.commit()
+    conn.close()
+    return {"ok": True, "producto": producto}
 
 
 # ── Call Center routes ────────────────────────────────────────────────────────

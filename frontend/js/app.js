@@ -41,6 +41,7 @@ function showApp() {
 
     if (payload.role === 'admin') {
       document.getElementById('nav-users').classList.remove('hidden');
+      document.getElementById('nav-projection').classList.remove('hidden');
     }
   } catch (_) {}
 
@@ -91,12 +92,14 @@ function switchTab(tab) {
   document.querySelectorAll('.nav-item').forEach(l => l.classList.toggle('active', l.dataset.tab === tab));
   document.querySelectorAll('.tab-content').forEach(s => s.classList.toggle('hidden', s.id !== `tab-${tab}`));
   document.getElementById('page-title').textContent =
-    { dashboard: 'Dashboard', calls: 'Panel de Llamadas', users: 'Gestión de Usuarios', control: 'Control Diario', mappings: 'Asignación de Campañas' }[tab];
+    { dashboard: 'Dashboard', calls: 'Panel de Llamadas', users: 'Gestión de Usuarios', control: 'Control Diario', mappings: 'Asignación de Campañas', projection: 'Supuestos de Proyección' }[tab];
 
   if (tab === 'users') {
     loadUsers();
   } else if (tab === 'mappings') {
     loadMappings();
+  } else if (tab === 'projection') {
+    loadProjectionConfigs();
   }
 }
 
@@ -231,32 +234,33 @@ function renderKpis(k) {
 function renderDailyControl(data) {
   const tbody = document.querySelector('#control-table tbody');
   if (!data || data.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="11" class="empty-row">No hay datos en el período</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="12" class="empty-row">No hay datos en el período</td></tr>';
     return;
   }
   
   const fmt = CHARTS.formatCOP;
   const fmtPct = (val) => (val != null && isFinite(val) ? (val * 100).toFixed(1) : '0.0') + '%';
+  const fmtNum = (val) => (val != null && isFinite(val) ? Number(val).toFixed(2).replace(/\.00$/, '') : '0');
   const fmtDate = (iso) => {
     if (!iso || !iso.includes('-')) return iso || '—';
     const [y, m, d] = iso.split('-');
     return `${d}/${m}/${y}`;
   };
 
-  // Build rows (no Efectivas column)
   const rows = data.map(r => `
     <tr>
       <td>${fmtDate(r.fecha)}</td>
       <td title="${r.producto}" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
         ${r.producto}
       </td>
-      <td>${r.total_pedidos}</td>
-      <td>${r.devoluciones}</td>
-      <td>${r.cancelados}</td>
-      <td>${fmt(r.ingresos_brutos)}</td>
-      <td>${fmt(r.margen_bruto)}</td>
+      <td>${r.ventas_dia}</td>
+      <td>${r.ventas_canceladas}</td>
+      <td>${fmtPct(r.pct_cancelado)}</td>
+      <td>${fmtPct(r.pct_devolucion)}</td>
+      <td>${fmtNum(r.ventas_efectivas)}</td>
       <td style="color: var(--amber)">${fmt(r.ad_spend)}</td>
       <td>${fmt(r.cpa)}</td>
+      <td>${fmt(r.utilidad_unitaria)}</td>
       <td style="color: ${r.utilidad_total >= 0 ? 'var(--green)' : 'var(--red)'}; font-weight: 600;">
         ${fmt(r.utilidad_total)}
       </td>
@@ -266,35 +270,103 @@ function renderDailyControl(data) {
 
   // Totals row
   const tot = data.reduce((acc, r) => {
-    acc.total_pedidos   += r.total_pedidos   || 0;
-    acc.devoluciones    += r.devoluciones    || 0;
-    acc.cancelados      += r.cancelados      || 0;
-    acc.ingresos_brutos += r.ingresos_brutos || 0;
-    acc.margen_bruto    += r.margen_bruto    || 0;
-    acc.ad_spend        += r.ad_spend        || 0;
-    acc.utilidad_total  += r.utilidad_total  || 0;
+    acc.ventas_dia         += r.ventas_dia || 0;
+    acc.ventas_canceladas  += r.ventas_canceladas || 0;
+    acc.ventas_efectivas   += r.ventas_efectivas || 0;
+    acc.ad_spend           += r.ad_spend || 0;
+    acc.utilidad_total     += r.utilidad_total || 0;
     return acc;
-  }, { total_pedidos:0, devoluciones:0, cancelados:0, ingresos_brutos:0, margen_bruto:0, ad_spend:0, utilidad_total:0 });
+  }, { ventas_dia:0, ventas_canceladas:0, ventas_efectivas:0, ad_spend:0, utilidad_total:0 });
 
-  const totRoi = tot.ingresos_brutos > 0 ? tot.utilidad_total / tot.ingresos_brutos : 0;
-  const totCpa  = tot.total_pedidos  > 0 ? tot.ad_spend / tot.total_pedidos : 0;
+  const totPctCancelado = tot.ventas_dia > 0 ? tot.ventas_canceladas / tot.ventas_dia : 0;
+  const weightedDevNumerator = data.reduce((sum, r) => sum + ((r.pct_devolucion || 0) * (r.ventas_dia || 0)), 0);
+  const totPctDevolucion = tot.ventas_dia > 0 ? weightedDevNumerator / tot.ventas_dia : 0;
+  const totCpa = tot.ventas_efectivas > 0 ? tot.ad_spend / tot.ventas_efectivas : 0;
+  const totUtilidadUnit = tot.ventas_efectivas > 0 ? tot.utilidad_total / tot.ventas_efectivas : 0;
+  const totRoi = tot.ad_spend > 0 ? tot.utilidad_total / tot.ad_spend : 0;
 
   const totalsRow = `
     <tr style="font-weight:700; background: rgba(255,255,255,0.05); border-top: 2px solid rgba(255,255,255,0.2);">
       <td colspan="2" style="text-align:right; padding-right: 12px;">TOTAL</td>
-      <td>${tot.total_pedidos}</td>
-      <td>${tot.devoluciones}</td>
-      <td>${tot.cancelados}</td>
-      <td>${fmt(tot.ingresos_brutos)}</td>
-      <td>${fmt(tot.margen_bruto)}</td>
+      <td>${tot.ventas_dia}</td>
+      <td>${tot.ventas_canceladas}</td>
+      <td>${fmtPct(totPctCancelado)}</td>
+      <td>${fmtPct(totPctDevolucion)}</td>
+      <td>${fmtNum(tot.ventas_efectivas)}</td>
       <td style="color: var(--amber)">${fmt(tot.ad_spend)}</td>
       <td>${fmt(totCpa)}</td>
+      <td>${fmt(totUtilidadUnit)}</td>
       <td style="color: ${tot.utilidad_total >= 0 ? 'var(--green)' : 'var(--red)'};">${fmt(tot.utilidad_total)}</td>
       <td>${fmtPct(totRoi)}</td>
     </tr>
   `;
 
   tbody.innerHTML = rows + totalsRow;
+}
+
+async function loadProjectionConfigs() {
+  try {
+    const rows = await API.getProjectionConfigs();
+    const tbody = document.querySelector('#projection-table tbody');
+    if (!rows || rows.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" class="empty-row">No hay productos disponibles.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = rows.map((r, i) => `
+      <tr>
+        <td title="${r.producto}">${r.producto}</td>
+        <td><input class="table-input projection-input" data-field="pct_devolucion" data-index="${i}" type="number" min="0" max="0.99" step="0.01" value="${Number(r.effective_pct_devolucion || 0).toFixed(2)}"></td>
+        <td><input class="table-input projection-input" data-field="flete_base_dev" data-index="${i}" type="number" min="0" step="1" value="${Math.round(r.effective_flete_base_dev || 0)}"></td>
+        <td><input class="table-input projection-input" data-field="precio_venta" data-index="${i}" type="number" min="0" step="1" value="${Math.round(r.effective_precio_venta || 0)}"></td>
+        <td><input class="table-input projection-input" data-field="costo_proveedor" data-index="${i}" type="number" min="0" step="1" value="${Math.round(r.effective_costo_proveedor || 0)}"></td>
+        <td><span class="chip ${r.has_custom_config ? 'chip-green' : 'chip-gray'}">${r.has_custom_config ? 'Manual' : 'Fallback'}</span></td>
+        <td>
+          <button class="btn btn-primary btn-sm projection-save-btn" data-index="${i}">Guardar</button>
+        </td>
+      </tr>
+    `).join('');
+
+    document.querySelectorAll('.projection-save-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const idx = Number(btn.dataset.index);
+        const row = rows[idx];
+        const getInput = (field) => document.querySelector(`.projection-input[data-index="${idx}"][data-field="${field}"]`);
+        const payload = {
+          producto: row.producto,
+          pct_devolucion: Number(getInput('pct_devolucion').value || 0),
+          flete_base_dev: Number(getInput('flete_base_dev').value || 0),
+          precio_venta: Number(getInput('precio_venta').value || 0),
+          costo_proveedor: Number(getInput('costo_proveedor').value || 0),
+        };
+
+        btn.disabled = true;
+        const previous = btn.textContent;
+        btn.textContent = 'Guardando...';
+        try {
+          await API.saveProjectionConfig(payload);
+          btn.textContent = 'Guardado';
+          setTimeout(() => {
+            btn.textContent = previous;
+            loadProjectionConfigs();
+            loadDashboard();
+          }, 700);
+        } catch (err) {
+          btn.textContent = 'Error';
+          setTimeout(() => {
+            btn.textContent = previous;
+          }, 1200);
+          alert('Error guardando supuestos: ' + err.message);
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    });
+  } catch (err) {
+    console.error(err);
+    document.querySelector('#projection-table tbody').innerHTML =
+      `<tr><td colspan="7" class="empty-row">Error al cargar supuestos: ${err.message}</td></tr>`;
+  }
 }
 
 async function loadMappings() {

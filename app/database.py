@@ -112,6 +112,17 @@ CREATE TABLE IF NOT EXISTS campaign_map (
 );
 """
 
+CREATE_PRODUCT_PROJECTION_CONFIG = """
+CREATE TABLE IF NOT EXISTS product_projection_config (
+    producto            TEXT PRIMARY KEY,
+    pct_devolucion      REAL NOT NULL DEFAULT 0.25,
+    flete_base_dev      REAL,
+    precio_venta        REAL,
+    costo_proveedor     REAL,
+    updated_at          TEXT DEFAULT (datetime('now'))
+);
+"""
+
 def get_db() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -128,6 +139,7 @@ def init_db():
     conn.execute(CREATE_USERS)
     conn.execute(CREATE_META_ADS_SPEND)
     conn.execute(CREATE_CAMPAIGN_MAP)
+    conn.execute(CREATE_PRODUCT_PROJECTION_CONFIG)
     conn.commit()
     conn.close()
 

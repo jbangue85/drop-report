@@ -155,89 +155,205 @@ def calc_daily_trend(conn, date_from=None, date_to=None) -> list:
 
 def calc_daily_control(conn, date_from=None, date_to=None) -> list:
     where, params = _where(date_from, date_to)
-    
     orders_query = f"""
-        SELECT 
+        SELECT
             fecha,
             COALESCE(producto, 'Sin Producto') AS producto,
-            COUNT(*) AS total_pedidos,
-            COUNT(CASE WHEN estatus = 'ENTREGADO' THEN 1 END) AS entregados,
-            COUNT(CASE WHEN estatus = 'CANCELADO' THEN 1 END) AS cancelados,
-            COUNT(CASE WHEN estatus = 'DEVOLUCION' THEN 1 END) AS devoluciones,
-            COALESCE(SUM(total_orden), 0) AS ingresos_brutos,
-            COALESCE(SUM(
-                CASE 
-                    WHEN estatus = 'CANCELADO' THEN 0
-                    WHEN estatus IN ('DEVOLUCION', 'DEVOLUCION EN BODEGA') THEN -COALESCE(precio_flete, 0)
-                    WHEN ganancia IS NOT NULL AND ganancia != 0 THEN ganancia
-                    ELSE total_orden - COALESCE(precio_proveedor_x_cantidad, 0) - COALESCE(precio_flete, 0)
-                END
-            ), 0) AS margen_bruto
+            COUNT(*) AS ventas_dia,
+            COUNT(CASE WHEN estatus = 'CANCELADO' THEN 1 END) AS ventas_canceladas
         FROM orders {where}
         GROUP BY fecha, COALESCE(producto, 'Sin Producto')
     """
     orders_rows = conn.execute(orders_query, params).fetchall()
-    
+
+    spend_where = where.replace("fecha", "s.fecha") if where else ""
     spend_query = f"""
-        SELECT 
-            s.fecha, 
+        SELECT
+            s.fecha,
             COALESCE(m.producto, 'Otros/Sin Asignar') AS producto,
-            COALESCE(SUM(s.spend), 0) as spend 
+            COALESCE(SUM(s.spend), 0) as spend
         FROM meta_ads_spend s
         LEFT JOIN campaign_map m ON s.campaign_name = m.campaign_name
-        {where.replace('fecha', 's.fecha') if where else ''}
+        {spend_where}
         GROUP BY s.fecha, COALESCE(m.producto, 'Otros/Sin Asignar')
     """
     spend_rows = conn.execute(spend_query, params).fetchall()
-    
-    # dict key is (fecha, producto)
+
+    config_rows = conn.execute("""
+        SELECT producto, pct_devolucion, flete_base_dev, precio_venta, costo_proveedor
+        FROM product_projection_config
+    """).fetchall()
+    config_map = {r["producto"]: dict(r) for r in config_rows}
+
+    fallback_rows = conn.execute("""
+        SELECT
+            COALESCE(producto, 'Sin Producto') AS producto,
+            AVG(CASE
+                WHEN cantidad IS NOT NULL AND cantidad > 0 THEN total_orden * 1.0 / cantidad
+                ELSE total_orden
+            END) AS precio_venta,
+            AVG(CASE
+                WHEN cantidad IS NOT NULL AND cantidad > 0 THEN precio_proveedor_x_cantidad * 1.0 / cantidad
+                ELSE precio_proveedor_x_cantidad
+            END) AS costo_proveedor,
+            AVG(precio_flete) AS flete_base_dev
+        FROM orders
+        GROUP BY COALESCE(producto, 'Sin Producto')
+    """).fetchall()
+    fallback_map = {r["producto"]: dict(r) for r in fallback_rows}
+
     iva_factor = _get_iva_factor()
     spend_dict = {(r["fecha"], r["producto"]): r["spend"] * iva_factor for r in spend_rows}
-    
+
+    def resolve_projection_inputs(producto: str) -> dict:
+        config = config_map.get(producto, {})
+        fallback = fallback_map.get(producto, {})
+
+        pct_devolucion = config.get("pct_devolucion")
+        if pct_devolucion is None:
+            pct_devolucion = 0.25
+
+        flete_base_dev = config.get("flete_base_dev")
+        if flete_base_dev is None:
+            flete_base_dev = fallback.get("flete_base_dev") or 0
+
+        precio_venta = config.get("precio_venta")
+        if precio_venta is None:
+            precio_venta = fallback.get("precio_venta") or 0
+
+        costo_proveedor = config.get("costo_proveedor")
+        if costo_proveedor is None:
+            costo_proveedor = fallback.get("costo_proveedor") or 0
+
+        return {
+            "pct_devolucion": pct_devolucion,
+            "flete_base_dev": flete_base_dev,
+            "precio_venta": precio_venta,
+            "costo_proveedor": costo_proveedor,
+        }
+
     results = {}
     for r in orders_rows:
         fecha = r["fecha"]
         producto = r["producto"]
         key = (fecha, producto)
-        
+        inputs = resolve_projection_inputs(producto)
+
+        ventas_dia = r["ventas_dia"] or 0
+        ventas_canceladas = r["ventas_canceladas"] or 0
+        pct_cancelado = (ventas_canceladas / ventas_dia) if ventas_dia > 0 else 0
+        pct_devolucion = inputs["pct_devolucion"] or 0
+        flete_con_dev = (
+            inputs["flete_base_dev"] / (1 - pct_devolucion)
+            if pct_devolucion < 1 else 0
+        )
+        ventas_efectivas = ventas_dia * (1 - (pct_cancelado + pct_devolucion))
         spend = spend_dict.get(key, 0)
-        margen = r["margen_bruto"]
-        utilidad_total = margen - spend
-        
+        cpa = (spend / ventas_efectivas) if ventas_efectivas > 0 else 0
+        utilidad_unitaria = (
+            inputs["precio_venta"] - flete_con_dev - inputs["costo_proveedor"] - cpa
+        )
+        utilidad_total = utilidad_unitaria * ventas_efectivas
         roi = (utilidad_total / spend) if spend > 0 else 0
-        cpa = (spend / r["total_pedidos"]) if r["total_pedidos"] > 0 else 0
-        
+
         results[key] = {
             "fecha": fecha,
             "producto": producto,
-            "total_pedidos": r["total_pedidos"],
-            "entregados": r["entregados"],
-            "cancelados": r["cancelados"],
-            "devoluciones": r["devoluciones"],
-            "ingresos_brutos": r["ingresos_brutos"],
-            "margen_bruto": margen,
+            "ventas_dia": ventas_dia,
+            "ventas_canceladas": ventas_canceladas,
+            "pct_cancelado": pct_cancelado,
+            "pct_devolucion": pct_devolucion,
+            "ventas_efectivas": ventas_efectivas,
             "ad_spend": spend,
             "cpa": cpa,
+            "precio_venta": inputs["precio_venta"],
+            "costo_proveedor": inputs["costo_proveedor"],
+            "flete_base_dev": inputs["flete_base_dev"],
+            "flete_con_dev": flete_con_dev,
+            "utilidad_unitaria": utilidad_unitaria,
             "utilidad_total": utilidad_total,
-            "roi": roi
+            "roi": roi,
         }
-        
+
     for r in spend_rows:
         fecha = r["fecha"]
         producto = r["producto"]
         key = (fecha, producto)
-        if key not in results:
-            spend = r["spend"]
-            results[key] = {
-                "fecha": fecha,
-                "producto": producto,
-                "total_pedidos": 0, "entregados": 0, "cancelados": 0, "devoluciones": 0,
-                "ingresos_brutos": 0, "margen_bruto": 0,
-                "ad_spend": spend, "cpa": 0, "utilidad_total": -spend, "roi": -1
-            }
-            
-    # Sort by date desc, then by total margin desc
-    return sorted(list(results.values()), key=lambda x: (x["fecha"], x["margen_bruto"]), reverse=True)
+        if key in results:
+            continue
+
+        inputs = resolve_projection_inputs(producto)
+        pct_devolucion = inputs["pct_devolucion"] or 0
+        flete_con_dev = (
+            inputs["flete_base_dev"] / (1 - pct_devolucion)
+            if pct_devolucion < 1 else 0
+        )
+        spend = (r["spend"] or 0) * iva_factor
+
+        results[key] = {
+            "fecha": fecha,
+            "producto": producto,
+            "ventas_dia": 0,
+            "ventas_canceladas": 0,
+            "pct_cancelado": 0,
+            "pct_devolucion": pct_devolucion,
+            "ventas_efectivas": 0,
+            "ad_spend": spend,
+            "cpa": 0,
+            "precio_venta": inputs["precio_venta"],
+            "costo_proveedor": inputs["costo_proveedor"],
+            "flete_base_dev": inputs["flete_base_dev"],
+            "flete_con_dev": flete_con_dev,
+            "utilidad_unitaria": inputs["precio_venta"] - flete_con_dev - inputs["costo_proveedor"],
+            "utilidad_total": -spend,
+            "roi": -1 if spend > 0 else 0,
+        }
+
+    return sorted(list(results.values()), key=lambda x: (x["fecha"], x["producto"]), reverse=True)
+
+
+def get_projection_configs(conn) -> list:
+    rows = conn.execute("""
+        WITH products AS (
+            SELECT DISTINCT COALESCE(producto, 'Sin Producto') AS producto FROM orders
+            UNION
+            SELECT producto FROM product_projection_config
+            UNION
+            SELECT DISTINCT COALESCE(producto, 'Otros/Sin Asignar') AS producto FROM campaign_map
+        ),
+        fallback AS (
+            SELECT
+                COALESCE(producto, 'Sin Producto') AS producto,
+                AVG(CASE
+                    WHEN cantidad IS NOT NULL AND cantidad > 0 THEN total_orden * 1.0 / cantidad
+                    ELSE total_orden
+                END) AS precio_venta,
+                AVG(CASE
+                    WHEN cantidad IS NOT NULL AND cantidad > 0 THEN precio_proveedor_x_cantidad * 1.0 / cantidad
+                    ELSE precio_proveedor_x_cantidad
+                END) AS costo_proveedor,
+                AVG(precio_flete) AS flete_base_dev
+            FROM orders
+            GROUP BY COALESCE(producto, 'Sin Producto')
+        )
+        SELECT
+            p.producto,
+            cfg.pct_devolucion,
+            cfg.flete_base_dev,
+            cfg.precio_venta,
+            cfg.costo_proveedor,
+            COALESCE(cfg.pct_devolucion, 0.25) AS effective_pct_devolucion,
+            COALESCE(cfg.flete_base_dev, fallback.flete_base_dev, 0) AS effective_flete_base_dev,
+            COALESCE(cfg.precio_venta, fallback.precio_venta, 0) AS effective_precio_venta,
+            COALESCE(cfg.costo_proveedor, fallback.costo_proveedor, 0) AS effective_costo_proveedor,
+            CASE WHEN cfg.producto IS NULL THEN 0 ELSE 1 END AS has_custom_config
+        FROM products p
+        LEFT JOIN product_projection_config cfg ON cfg.producto = p.producto
+        LEFT JOIN fallback ON fallback.producto = p.producto
+        WHERE p.producto IS NOT NULL
+        ORDER BY p.producto
+    """).fetchall()
+    return [dict(r) for r in rows]
 
 
 def calc_product_ranking(conn, date_from=None, date_to=None, limit=15) -> list:

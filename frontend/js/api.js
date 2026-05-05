@@ -86,6 +86,12 @@ const API = (() => {
     saveMapping: (campaign_name, producto) =>
       request('POST', '/api/mappings', { campaign_name, producto }),
 
+    getProjectionConfigs: () =>
+      request('GET', '/api/projection-configs'),
+
+    saveProjectionConfig: (payload) =>
+      request('POST', '/api/projection-configs', payload),
+
     getFilterOptions: () =>
       request('GET', '/api/filters/options'),
 

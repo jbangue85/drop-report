@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="/css/styles_mobile.css" />
+  <link rel="stylesheet" href="/css/styles_mobile.css?v=10" />
 </head>
 <body>
 
@@ -63,6 +63,10 @@
       <a href="#" class="nav-item" data-tab="mappings" id="nav-mappings">
         <span class="nav-icon">🔗</span>
         <span>Asignación Campañas</span>
+      </a>
+      <a href="#" class="nav-item hidden" data-tab="projection" id="nav-projection">
+        <span class="nav-icon">🧮</span>
+        <span>Supuestos</span>
       </a>
       <a href="#" class="nav-item hidden" data-tab="users" id="nav-users">
         <span class="nav-icon">👥</span>
@@ -239,23 +243,24 @@
     <section id="tab-control" class="tab-content hidden">
       <div class="calls-header">
         <div>
-          <h3>Control Diario de Operaciones</h3>
-          <p class="calls-sub">Monitorea tus pedidos, rentabilidad y gasto de Meta Ads día a día.</p>
+          <h3>Control Diario Proyectado</h3>
+          <p class="calls-sub">Proyección operativa diaria basada en pedidos creados, gasto ads y supuestos por producto.</p>
         </div>
       </div>
       
       <div class="chart-card table-wrap" style="max-height: 70vh; overflow-x: auto;">
-        <table class="data-table" id="control-table" style="table-layout: fixed; width: 100%; min-width: 900px;">
+        <table class="data-table" id="control-table" style="table-layout: fixed; width: 100%; min-width: 1250px;">
           <colgroup>
             <col style="width: 95px;">  <!-- Día -->
             <col style="width: 180px;"> <!-- Producto -->
             <col style="width: 70px;">  <!-- Ventas -->
-            <col style="width: 100px;"> <!-- Devoluciones -->
             <col style="width: 90px;">  <!-- Cancelados -->
-            <col style="width: 120px;"> <!-- Ingresos -->
-            <col style="width: 120px;"> <!-- Margen Bruto -->
+            <col style="width: 90px;">  <!-- % Cancelado -->
+            <col style="width: 90px;">  <!-- % Devolucion -->
+            <col style="width: 90px;">  <!-- Efectivas -->
             <col style="width: 110px;"> <!-- Gasto Meta -->
             <col style="width: 100px;"> <!-- CPA -->
+            <col style="width: 120px;"> <!-- Utilidad Unidad -->
             <col style="width: 120px;"> <!-- Utilidad Total -->
             <col style="width: 70px;">  <!-- ROI -->
           </colgroup>
@@ -264,18 +269,48 @@
               <th>Día</th>
               <th>Producto</th>
               <th>Ventas</th>
-              <th>Devoluciones</th>
               <th>Cancelados</th>
-              <th>Ingresos</th>
-              <th>Margen Bruto</th>
+              <th>% Canc.</th>
+              <th>% Devol.</th>
+              <th>Efectivas</th>
               <th>Gasto Meta</th>
               <th>CPA</th>
+              <th>Utilidad/U</th>
               <th>Utilidad Total</th>
               <th>ROI</th>
             </tr>
           </thead>
           <tbody>
             <!-- Generado por JS -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ══════════════ PROJECTION TAB ══════════════ -->
+    <section id="tab-projection" class="tab-content hidden">
+      <div class="calls-header">
+        <div>
+          <h3>Supuestos de Proyección</h3>
+          <p class="calls-sub">Configura por producto la devolución estimada, flete base, precio de venta y costo proveedor.</p>
+        </div>
+      </div>
+
+      <div class="chart-card table-wrap" style="max-height: 70vh;">
+        <table class="data-table" id="projection-table" style="min-width: 980px;">
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th>% Devolución</th>
+              <th>Flete Base</th>
+              <th>Precio Venta</th>
+              <th>Costo Proveedor</th>
+              <th>Origen</th>
+              <th>Acción</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td colspan="7" class="empty-row">Cargando...</td></tr>
           </tbody>
         </table>
       </div>
@@ -395,9 +430,8 @@
   </div>
 </div>
 
-<script src="/js/api.js?v=9"></script>
+<script src="/js/api.js?v=10"></script>
 <script src="/js/charts.js?v=9"></script>
-<script src="/js/app.js?v=9"></script>
+<script src="/js/app.js?v=10"></script>
 </body>
 </html>
-
