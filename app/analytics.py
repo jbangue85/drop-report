@@ -36,6 +36,29 @@ def _where(date_from=None, date_to=None, estatus=None, extra=""):
     return clause, params
 
 
+KNOWN_ORDER_MARGIN_SQL = """
+    CASE
+        WHEN ganancia IS NOT NULL THEN ganancia
+        ELSE total_orden - COALESCE(precio_proveedor_x_cantidad, 0) - COALESCE(precio_flete, 0)
+    END
+"""
+
+PROJECTED_ORDER_MARGIN_SQL = f"""
+    CASE
+        WHEN estatus = 'CANCELADO' THEN 0
+        WHEN estatus IN ('DEVOLUCION', 'DEVOLUCION EN BODEGA') THEN -COALESCE(precio_flete, 0) - COALESCE(costo_devolucion_flete, 0)
+        ELSE {KNOWN_ORDER_MARGIN_SQL}
+    END
+"""
+
+CONFIRMED_ORDER_MARGIN_SQL = f"""
+    CASE
+        WHEN estatus = 'ENTREGADO' THEN {KNOWN_ORDER_MARGIN_SQL}
+        ELSE 0
+    END
+"""
+
+
 # ── KPIs ─────────────────────────────────────────────────────────────────────
 
 def calc_kpis(conn: sqlite3.Connection, date_from=None, date_to=None, estatus=None) -> dict:
@@ -43,15 +66,8 @@ def calc_kpis(conn: sqlite3.Connection, date_from=None, date_to=None, estatus=No
     row = conn.execute(f"""
         SELECT
             COALESCE(SUM(total_orden), 0)                                          AS ingresos_brutos,
-            COALESCE(SUM(ganancia), 0)                                             AS ganancia_real,
-            COALESCE(SUM(
-                CASE 
-                    WHEN estatus = 'CANCELADO' THEN 0
-                    WHEN estatus IN ('DEVOLUCION', 'DEVOLUCION EN BODEGA') THEN -COALESCE(precio_flete, 0)
-                    WHEN ganancia IS NOT NULL AND ganancia != 0 THEN ganancia
-                    ELSE total_orden - COALESCE(precio_proveedor_x_cantidad, 0) - COALESCE(precio_flete, 0)
-                END
-            ), 0)                                                                   AS ganancia_proyectada,
+            COALESCE(SUM({CONFIRMED_ORDER_MARGIN_SQL}), 0)                         AS ganancia_real,
+            COALESCE(SUM({PROJECTED_ORDER_MARGIN_SQL}), 0)                         AS ganancia_proyectada,
             COUNT(*)                                                                AS volumen_pedidos,
             COUNT(CASE WHEN estatus = 'ENTREGADO' THEN 1 END)                      AS entregados,
             COUNT(CASE WHEN estatus = 'CANCELADO' THEN 1 END)                      AS cancelados,
@@ -112,14 +128,7 @@ def calc_daily_trend(conn, date_from=None, date_to=None) -> list:
             fecha,
             COUNT(*) AS pedidos,
             COALESCE(SUM(total_orden), 0) AS ingresos,
-            COALESCE(SUM(
-                CASE 
-                    WHEN estatus = 'CANCELADO' THEN 0
-                    WHEN estatus IN ('DEVOLUCION', 'DEVOLUCION EN BODEGA') THEN -COALESCE(precio_flete, 0)
-                    WHEN ganancia IS NOT NULL AND ganancia != 0 THEN ganancia
-                    ELSE total_orden - COALESCE(precio_proveedor_x_cantidad, 0) - COALESCE(precio_flete, 0)
-                END
-            ), 0) AS ganancia,
+            COALESCE(SUM({PROJECTED_ORDER_MARGIN_SQL}), 0) AS ganancia,
             COUNT(CASE WHEN estatus = 'ENTREGADO' THEN 1 END) AS entregados,
             COUNT(CASE WHEN estatus IN ('DESPACHADA', 'EN REPARTO', 'EN ESPERA DE RUTA DOMESTICA', 'ENTREGADO', 'DEVOLUCION', 'NOVEDAD', 'EN BODEGA TRANSPORTADORA', 'EN REEXPEDICION', 'GUIA_GENERADA', 'PREPARADO PARA TRANSPORTADORA') THEN 1 END) AS despachados,
             COUNT(CASE WHEN estatus IN ('ENTREGADO','CANCELADO','DEVOLUCION','DEVOLUCION EN BODEGA') THEN 1 END) AS finalizados

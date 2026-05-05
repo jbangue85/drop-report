@@ -2,11 +2,35 @@
  * app.js — Main controller: auth, navigation, data loading, call center.
  */
 
+function formatLocalDate(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function shiftDays(date, days) {
+  const shifted = new Date(date);
+  shifted.setDate(shifted.getDate() + days);
+  return shifted;
+}
+
+function startOfWeekMonday(date) {
+  const start = new Date(date);
+  const day = start.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  start.setDate(start.getDate() + diff);
+  start.setHours(0, 0, 0, 0);
+  return start;
+}
+
+const todayLocal = new Date();
+
 /* ═══════════════════════════ STATE ═════════════════════════════════ */
 const state = {
   filters: { 
-    date_from: new Date(new Date().setDate(new Date().getDate() - 29)).toISOString().split('T')[0], 
-    date_to: new Date().toISOString().split('T')[0], 
+    date_from: formatLocalDate(shiftDays(todayLocal, -29)),
+    date_to: formatLocalDate(todayLocal),
     estatus: null 
   },
   activeTab: 'dashboard',
@@ -127,33 +151,31 @@ document.getElementById('filter-preset').addEventListener('change', (e) => {
   dt.classList.add('hidden');
 
   const today = new Date();
-  const fmt = (d) => d.toISOString().split('T')[0];
-  const setRelativeWeek = (startDaysAgo, endDaysAgo) => {
-    const from = new Date(today);
-    const to = new Date(today);
-    from.setDate(today.getDate() - startDaysAgo);
-    to.setDate(today.getDate() - endDaysAgo);
-    state.filters.date_from = fmt(from);
-    state.filters.date_to = fmt(to);
+  const setClosedWeek = (weeksAgo) => {
+    const currentWeekStart = startOfWeekMonday(today);
+    const from = shiftDays(currentWeekStart, -7 * weeksAgo);
+    const to = shiftDays(from, 6);
+    state.filters.date_from = formatLocalDate(from);
+    state.filters.date_to = formatLocalDate(to);
   };
 
   if (val === 'today') {
-    state.filters.date_from = fmt(today);
-    state.filters.date_to   = fmt(today);
+    state.filters.date_from = formatLocalDate(today);
+    state.filters.date_to   = formatLocalDate(today);
   } else if (val === '7d') {
-    const from = new Date(today); from.setDate(today.getDate() - 6);
-    state.filters.date_from = fmt(from);
-    state.filters.date_to   = fmt(today);
+    const from = shiftDays(today, -6);
+    state.filters.date_from = formatLocalDate(from);
+    state.filters.date_to   = formatLocalDate(today);
   } else if (val === '1w_ago') {
-    setRelativeWeek(13, 7);
+    setClosedWeek(1);
   } else if (val === '2w_ago') {
-    setRelativeWeek(20, 14);
+    setClosedWeek(2);
   } else if (val === '3w_ago') {
-    setRelativeWeek(27, 21);
+    setClosedWeek(3);
   } else if (val === '30d') {
-    const from = new Date(today); from.setDate(today.getDate() - 29);
-    state.filters.date_from = fmt(from);
-    state.filters.date_to   = fmt(today);
+    const from = shiftDays(today, -29);
+    state.filters.date_from = formatLocalDate(from);
+    state.filters.date_to   = formatLocalDate(today);
   } else if (val === 'custom') {
     df.classList.remove('hidden');
     dt.classList.remove('hidden');
