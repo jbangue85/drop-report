@@ -54,6 +54,8 @@ def calc_kpis(conn: sqlite3.Connection, date_from=None, date_to=None, estatus=No
             ), 0)                                                                   AS ganancia_proyectada,
             COUNT(*)                                                                AS volumen_pedidos,
             COUNT(CASE WHEN estatus = 'ENTREGADO' THEN 1 END)                      AS entregados,
+            COUNT(CASE WHEN estatus = 'CANCELADO' THEN 1 END)                      AS cancelados,
+            COUNT(CASE WHEN estatus IN ('DEVOLUCION', 'DEVOLUCION EN BODEGA') THEN 1 END) AS devoluciones,
             COUNT(CASE WHEN estatus IN ('PENDIENTE CONFIRMACION','NOVEDAD') THEN 1 END) AS requieren_accion,
             ROUND(
                 COUNT(CASE WHEN estatus = 'ENTREGADO' THEN 1 END) * 100.0
@@ -61,7 +63,14 @@ def calc_kpis(conn: sqlite3.Connection, date_from=None, date_to=None, estatus=No
                     'ENTREGADO','CANCELADO','DEVOLUCION','DEVOLUCION EN BODEGA'
                 ) THEN 1 END), 0),
                 1
-            )                                                                       AS tasa_entrega
+            )                                                                       AS tasa_entrega,
+            ROUND(
+                COUNT(CASE WHEN estatus IN ('DEVOLUCION', 'DEVOLUCION EN BODEGA') THEN 1 END) * 100.0
+                / NULLIF(COUNT(CASE WHEN estatus IN (
+                    'ENTREGADO','DEVOLUCION','DEVOLUCION EN BODEGA'
+                ) THEN 1 END), 0),
+                1
+            )                                                                       AS tasa_devolucion
         FROM orders {where}
     """, params).fetchone()
 

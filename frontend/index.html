@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="/css/styles_mobile.css?v=11" />
+  <link rel="stylesheet" href="/css/styles_mobile.css?v=13" />
 </head>
 <body>
 
@@ -98,6 +98,9 @@
           <select id="filter-preset" class="select-input">
             <option value="today">Hoy</option>
             <option value="7d">Últimos 7 días</option>
+            <option value="1w_ago">1 semana atrás</option>
+            <option value="2w_ago">2 semanas atrás</option>
+            <option value="3w_ago">3 semanas atrás</option>
             <option value="30d" selected>Últimos 30 días</option>
             <option value="custom">Personalizado</option>
           </select>
@@ -156,6 +159,11 @@
           <div class="kpi-label">Tasa de Entrega</div>
           <div class="kpi-value" id="val-tasa">—</div>
           <div class="kpi-sub" id="sub-tasa">Entregados / Pedidos finalizados</div>
+        </div>
+        <div class="kpi-card kpi-red" id="kpi-devolucion">
+          <div class="kpi-label">% de Devolución</div>
+          <div class="kpi-value" id="val-devolucion">—</div>
+          <div class="kpi-sub" id="sub-devolucion">Devoluciones / cierres logísticos</div>
         </div>
       </div>
 
@@ -429,8 +437,8 @@
   </div>
 </div>
 
-  <script src="/js/api.js?v=11"></script>
+  <script src="/js/api.js?v=13"></script>
   <script src="/js/charts.js?v=10"></script>
-  <script src="/js/app.js?v=11"></script>
+  <script src="/js/app.js?v=13"></script>
 </body>
 </html>

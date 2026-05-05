@@ -128,6 +128,14 @@ document.getElementById('filter-preset').addEventListener('change', (e) => {
 
   const today = new Date();
   const fmt = (d) => d.toISOString().split('T')[0];
+  const setRelativeWeek = (startDaysAgo, endDaysAgo) => {
+    const from = new Date(today);
+    const to = new Date(today);
+    from.setDate(today.getDate() - startDaysAgo);
+    to.setDate(today.getDate() - endDaysAgo);
+    state.filters.date_from = fmt(from);
+    state.filters.date_to = fmt(to);
+  };
 
   if (val === 'today') {
     state.filters.date_from = fmt(today);
@@ -136,6 +144,12 @@ document.getElementById('filter-preset').addEventListener('change', (e) => {
     const from = new Date(today); from.setDate(today.getDate() - 6);
     state.filters.date_from = fmt(from);
     state.filters.date_to   = fmt(today);
+  } else if (val === '1w_ago') {
+    setRelativeWeek(13, 7);
+  } else if (val === '2w_ago') {
+    setRelativeWeek(20, 14);
+  } else if (val === '3w_ago') {
+    setRelativeWeek(27, 21);
   } else if (val === '30d') {
     const from = new Date(today); from.setDate(today.getDate() - 29);
     state.filters.date_from = fmt(from);
@@ -201,6 +215,7 @@ function renderKpis(k) {
   document.getElementById('val-ads').textContent         = fmt(k.ad_spend || 0);
   document.getElementById('val-pedidos').textContent     = k.volumen_pedidos ?? '—';
   document.getElementById('val-tasa').textContent        = k.tasa_entrega != null ? `${k.tasa_entrega}%` : '—';
+  document.getElementById('val-devolucion').textContent  = k.tasa_devolucion != null ? `${k.tasa_devolucion}%` : '—';
 
   // Dynamic colors
   const cardProy = document.getElementById('kpi-ganancia');
@@ -217,6 +232,10 @@ function renderKpis(k) {
 
   document.getElementById('sub-pedidos').textContent =
     `${k.entregados ?? 0} entregados · ${k.requieren_accion ?? 0} requieren gestión`;
+  document.getElementById('sub-tasa').textContent =
+    `${k.entregados ?? 0} entregados / ${(k.entregados ?? 0) + (k.devoluciones ?? 0) + (k.cancelados ?? 0)} finalizados`;
+  document.getElementById('sub-devolucion').textContent =
+    `${k.devoluciones ?? 0} devoluciones / ${(k.entregados ?? 0) + (k.devoluciones ?? 0)} cierres logísticos`;
 
   // Update calls badge
   const badge = document.getElementById('calls-badge');
