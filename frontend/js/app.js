@@ -238,16 +238,23 @@ function renderKpis(k) {
   document.getElementById('val-pedidos').textContent     = k.volumen_pedidos ?? '—';
   document.getElementById('val-tasa').textContent        = k.tasa_entrega != null ? `${k.tasa_entrega}%` : '—';
   document.getElementById('val-devolucion').textContent  = k.tasa_devolucion != null ? `${k.tasa_devolucion}%` : '—';
+  document.getElementById('val-cierre').textContent      = k.tasa_cierre_logistico != null ? `${k.tasa_cierre_logistico}%` : '—';
 
   // Dynamic colors
   const cardProy = document.getElementById('kpi-ganancia');
   const cardConf = document.getElementById('kpi-confirmada');
+  const cardClosure = document.getElementById('kpi-cierre');
 
   cardProy.classList.toggle('kpi-green', valProy >= 0);
   cardProy.classList.toggle('kpi-red', valProy < 0);
   
   cardConf.classList.toggle('kpi-green', valConf >= 0);
   cardConf.classList.toggle('kpi-red', valConf < 0);
+
+  const closureRate = k.tasa_cierre_logistico ?? 0;
+  cardClosure.classList.toggle('kpi-green', closureRate >= 100);
+  cardClosure.classList.toggle('kpi-amber', closureRate < 100 && closureRate > 0);
+  cardClosure.classList.toggle('kpi-red', closureRate === 0);
 
   document.getElementById('sub-ads').textContent = 
     `Inversión Meta Ads ${k.ads_iva > 0 ? `(+${k.ads_iva.toFixed(0)}% IVA)` : ''}`;
@@ -258,6 +265,8 @@ function renderKpis(k) {
     `${k.entregados ?? 0} entregados / ${(k.entregados ?? 0) + (k.devoluciones ?? 0) + (k.cancelados ?? 0)} finalizados`;
   document.getElementById('sub-devolucion').textContent =
     `${k.devoluciones ?? 0} devoluciones / ${(k.entregados ?? 0) + (k.devoluciones ?? 0)} cierres logísticos`;
+  document.getElementById('sub-cierre').textContent =
+    `${k.en_curso_logistico ?? 0} en curso / ${Math.max((k.volumen_pedidos ?? 0) - (k.cancelados ?? 0), 0)} no cancelados`;
 
   // Update calls badge
   const badge = document.getElementById('calls-badge');

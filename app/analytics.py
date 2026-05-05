@@ -46,7 +46,7 @@ KNOWN_ORDER_MARGIN_SQL = """
 PROJECTED_ORDER_MARGIN_SQL = f"""
     CASE
         WHEN estatus = 'CANCELADO' THEN 0
-        WHEN estatus IN ('DEVOLUCION', 'DEVOLUCION EN BODEGA') THEN -COALESCE(precio_flete, 0) - COALESCE(costo_devolucion_flete, 0)
+        WHEN estatus IN ('DEVOLUCION', 'DEVOLUCION EN BODEGA') THEN -COALESCE(precio_proveedor_x_cantidad, 0) - COALESCE(precio_flete, 0) - COALESCE(costo_devolucion_flete, 0)
         ELSE {KNOWN_ORDER_MARGIN_SQL}
     END
 """
@@ -72,6 +72,7 @@ def calc_kpis(conn: sqlite3.Connection, date_from=None, date_to=None, estatus=No
             COUNT(CASE WHEN estatus = 'ENTREGADO' THEN 1 END)                      AS entregados,
             COUNT(CASE WHEN estatus = 'CANCELADO' THEN 1 END)                      AS cancelados,
             COUNT(CASE WHEN estatus IN ('DEVOLUCION', 'DEVOLUCION EN BODEGA') THEN 1 END) AS devoluciones,
+            COUNT(CASE WHEN estatus NOT IN ('ENTREGADO', 'CANCELADO', 'DEVOLUCION', 'DEVOLUCION EN BODEGA') THEN 1 END) AS en_curso_logistico,
             COUNT(CASE WHEN estatus IN ('PENDIENTE CONFIRMACION','NOVEDAD') THEN 1 END) AS requieren_accion,
             ROUND(
                 COUNT(CASE WHEN estatus = 'ENTREGADO' THEN 1 END) * 100.0
@@ -86,7 +87,12 @@ def calc_kpis(conn: sqlite3.Connection, date_from=None, date_to=None, estatus=No
                     'ENTREGADO','DEVOLUCION','DEVOLUCION EN BODEGA'
                 ) THEN 1 END), 0),
                 1
-            )                                                                       AS tasa_devolucion
+            )                                                                       AS tasa_devolucion,
+            ROUND(
+                COUNT(CASE WHEN estatus IN ('ENTREGADO','DEVOLUCION','DEVOLUCION EN BODEGA') THEN 1 END) * 100.0
+                / NULLIF(COUNT(CASE WHEN estatus != 'CANCELADO' THEN 1 END), 0),
+                1
+            )                                                                       AS tasa_cierre_logistico
         FROM orders {where}
     """, params).fetchone()
 
