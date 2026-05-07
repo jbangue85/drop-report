@@ -25,6 +25,15 @@ function startOfWeekMonday(date) {
 }
 
 const todayLocal = new Date();
+const VALID_TABS = new Set(['dashboard', 'calls', 'control', 'mappings', 'projection', 'users']);
+const TAB_TITLES = {
+  dashboard: 'Dashboard',
+  calls: 'Panel de Llamadas',
+  users: 'Gestión de Usuarios',
+  control: 'Control Diario',
+  mappings: 'Asignación de Campañas',
+  projection: 'Supuestos de Proyección',
+};
 
 /* ═══════════════════════════ STATE ═════════════════════════════════ */
 const state = {
@@ -70,6 +79,7 @@ function showApp() {
   } catch (_) {}
 
   initFilters();
+  switchTab(getInitialTab(), { updateHash: false });
   loadDashboard();
   loadCallsPending();
 }
@@ -111,12 +121,40 @@ document.querySelectorAll('.nav-item').forEach(link => {
   });
 });
 
-function switchTab(tab) {
+window.addEventListener('hashchange', () => {
+  if (!API.isLoggedIn()) return;
+  switchTab(getInitialTab(), { updateHash: false });
+});
+
+function getInitialTab() {
+  const fromHash = window.location.hash.replace(/^#/, '');
+  if (!VALID_TABS.has(fromHash)) return 'dashboard';
+  if (!canAccessTab(fromHash)) return 'dashboard';
+  return fromHash;
+}
+
+function canAccessTab(tab) {
+  const role = state.currentUser?.role;
+  if (tab === 'users' || tab === 'projection') {
+    return role === 'admin';
+  }
+  return true;
+}
+
+function switchTab(tab, options = {}) {
+  const { updateHash = true } = options;
+  if (!VALID_TABS.has(tab) || !canAccessTab(tab)) {
+    tab = 'dashboard';
+  }
+
   state.activeTab = tab;
   document.querySelectorAll('.nav-item').forEach(l => l.classList.toggle('active', l.dataset.tab === tab));
   document.querySelectorAll('.tab-content').forEach(s => s.classList.toggle('hidden', s.id !== `tab-${tab}`));
-  document.getElementById('page-title').textContent =
-    { dashboard: 'Dashboard', calls: 'Panel de Llamadas', users: 'Gestión de Usuarios', control: 'Control Diario', mappings: 'Asignación de Campañas', projection: 'Supuestos de Proyección' }[tab];
+  document.getElementById('page-title').textContent = TAB_TITLES[tab];
+
+  if (updateHash && window.location.hash !== `#${tab}`) {
+    window.location.hash = tab;
+  }
 
   if (tab === 'users') {
     loadUsers();
@@ -557,13 +595,19 @@ function renderCalls(data) {
 
   let filtered = data;
   if (state.callFilter === 'pending') {
-    filtered = data.filter(o => 
-      !o.ultima_gestion || 
-      (['NO_CONTESTO', 'BUZON', 'OTRO'].includes(o.ultima_gestion) && o.intentos < 2)
+    filtered = data.filter(o =>
+      o.requiere_llamada && (
+        !o.ultima_gestion ||
+        (['NO_CONTESTO', 'BUZON', 'OTRO'].includes(o.ultima_gestion) && o.intentos < 2)
+      )
+    );
+  } else if (state.callFilter === 'support') {
+    filtered = data.filter(o =>
+      !o.requiere_llamada && o.tipo_gestion === 'soporte' && o.ultima_gestion !== 'SOPORTE_DROPI'
     );
   } else if (state.callFilter === 'ready') {
-    filtered = data.filter(o => 
-      ['CONTACTADO', 'SOLUCIONADO', 'DEVOLUCION'].includes(o.ultima_gestion) || 
+    filtered = data.filter(o =>
+      ['CONTACTADO', 'SOLUCIONADO', 'DEVOLUCION', 'SOPORTE_DROPI'].includes(o.ultima_gestion) ||
       o.intentos >= 2
     );
   }
@@ -581,6 +625,7 @@ function renderCalls(data) {
       NO_CONTESTO: 'chip-gray',
       BUZON:       'chip-gray',
       DEVOLUCION:  'chip-red',
+      SOPORTE_DROPI: 'chip-blue',
       OTRO:        'chip-blue',
     };
     return `<span class="chip ${map[r] || 'chip-gray'}">${r}</span>`;
@@ -594,9 +639,33 @@ function renderCalls(data) {
     return `<span class="chip ${map[s] || 'chip-gray'}">${s}</span>`;
   };
 
+  const actionChips = (order) => {
+    const chips = [];
+    if (order.sin_movimiento_24h) {
+      chips.push('<span class="chip chip-red">+24h: verificar Dropi/soporte</span>');
+    }
+    if (order.pendiente_recibir_oficina) {
+      chips.push('<span class="chip chip-amber">Pendiente recibir en oficina</span>');
+    }
+    if (order.regla_atencion && !order.pendiente_recibir_oficina) {
+      chips.push('<span class="chip chip-amber">Requiere gestión</span>');
+    }
+    return chips.join('');
+  };
+
+  const fullAddress = (order) => {
+    const parts = [order.direccion, order.ciudad_destino, order.departamento_destino]
+      .filter(Boolean);
+    return parts.length ? parts.join(', ') : 'Sin dirección';
+  };
+
+  const jsString = (value) => JSON.stringify(value).replace(/"/g, '&quot;');
+
   container.innerHTML = filtered.map(o => {
     let dropiWarning = '';
-    if (['CONTACTADO', 'SOLUCIONADO', 'DEVOLUCION'].includes(o.ultima_gestion)) {
+    if (o.ultima_gestion === 'SOPORTE_DROPI') {
+      dropiWarning = `<div style="font-size: 0.75rem; color: var(--blue); margin-top: 6px; font-weight: 600;">Caso de soporte registrado en Dropi</div>`;
+    } else if (['CONTACTADO', 'SOLUCIONADO', 'DEVOLUCION'].includes(o.ultima_gestion)) {
       dropiWarning = `<div style="font-size: 0.75rem; color: var(--amber); margin-top: 6px; font-weight: 600;">⚠️ Falta actualizar estado en Dropi</div>`;
     } else if (o.intentos >= 2) {
       dropiWarning = `<div style="font-size: 0.75rem; color: var(--red); margin-top: 6px; font-weight: 600;">🛑 Alcanzó ${o.intentos} intentos. Cancelar orden en Dropi</div>`;
@@ -609,19 +678,29 @@ function renderCalls(data) {
           ${o.nombre_cliente || 'Cliente sin nombre'}
           ${statusChip(o.estatus)}
           ${resultChip(o.ultima_gestion)}
+          ${actionChips(o)}
         </div>
         <div class="call-phone">
           📞 ${o.telefono || 'Sin teléfono'}
           <button class="btn-ghost btn-icon" style="padding: 2px 6px; font-size: 14px; margin-left: 4px;" title="Copiar ID para Dropi" onclick="navigator.clipboard.writeText('${o.id}'); alert('ID ${o.id} copiado al portapapeles. ¡Pégalo en Dropi!');">📋 Copiar ID: ${o.id}</button>
         </div>
+        <div class="call-meta" style="color:var(--text-1); margin-top: 6px;">
+          <span>📍 Dirección: ${fullAddress(o)}</span>
+          ${o.direccion ? `<button class="btn-ghost btn-icon" style="padding: 2px 6px; font-size: 14px;" title="Copiar dirección" onclick="navigator.clipboard.writeText(${jsString(fullAddress(o))}); alert('Dirección copiada al portapapeles.');">📋 Copiar</button>` : ''}
+        </div>
         <div class="call-meta">
           <span>📦 ${o.producto || '—'} × ${o.cantidad || 1}</span>
-          <span>📍 ${o.ciudad_destino || '—'}, ${o.departamento_destino || '—'}</span>
           <span>🚚 ${o.transportadora || '—'}</span>
           <span>💰 ${CHARTS.formatCOP(o.total_orden)}</span>
           <span>🗓 ${formatIsoDate(o.fecha)}</span>
         </div>
         ${o.novedad ? `<div class="call-meta" style="color:var(--amber)">⚠ Novedad: ${o.novedad}</div>` : ''}
+        ${(o.sin_movimiento_24h || o.pendiente_recibir_oficina) ? `
+          <div class="call-meta" style="margin-top: 6px;">
+            ${o.sin_movimiento_24h ? `<span>⏱ Último movimiento: ${formatDatetime([o.fecha_ultimo_movimiento, o.hora_ultimo_movimiento].filter(Boolean).join('T')) || 'Sin fecha'}</span><span>Verificar en Dropi y montar caso de soporte si aplica</span>` : ''}
+            ${o.pendiente_recibir_oficina ? `<span>📦 Revisar recepción en oficina</span>` : ''}
+          </div>
+        ` : ''}
         ${o.ultima_gestion ? `
           <div class="call-note-preview">
             <strong>${o.agente}</strong> · ${formatDatetime(o.fecha_gestion)}<br/>
@@ -631,11 +710,11 @@ function renderCalls(data) {
         ` : ''}
       </div>
       <div class="call-actions">
-        ${o.intentos > 0 ? `<div style="font-size: .8rem; color: ${o.intentos >= 2 ? 'var(--red)' : 'var(--text-2)'}; text-align: right; margin-bottom: 4px;">Intentos de llamada: <strong>${o.intentos}</strong></div>` : ''}
+        ${o.requiere_llamada && o.intentos > 0 ? `<div style="font-size: .8rem; color: ${o.intentos >= 2 ? 'var(--red)' : 'var(--text-2)'}; text-align: right; margin-bottom: 4px;">Intentos de llamada: <strong>${o.intentos}</strong></div>` : ''}
         <button class="btn btn-primary btn-sm" onclick="openCallModal(${JSON.stringify(o).replace(/"/g, '&quot;')})">
-          ${o.ultima_gestion ? '↻ Actualizar' : '📝 Registrar'}
+          ${o.ultima_gestion ? '↻ Actualizar' : (o.requiere_llamada ? '📝 Registrar llamada' : '🛠 Registrar soporte')}
         </button>
-        <a href="tel:${o.telefono}" class="btn btn-green btn-sm">Llamar</a>
+        ${o.requiere_llamada ? `<a href="tel:${o.telefono}" class="btn btn-green btn-sm">Llamar</a>` : ''}
       </div>
     </div>`;
   }).join('');
@@ -644,14 +723,18 @@ function renderCalls(data) {
 /* ═══════════════════════════ CALL MODAL ═══════════════════════════ */
 function openCallModal(order) {
   document.getElementById('modal-order-id').value = order.id;
-  document.getElementById('modal-resultado').value = '';
+  document.getElementById('modal-title').textContent = order.requiere_llamada
+    ? 'Registrar Gestión de Llamada'
+    : 'Registrar Gestión de Soporte';
+  document.getElementById('modal-resultado').value = order.requiere_llamada ? '' : 'SOPORTE_DROPI';
   document.getElementById('modal-notas').value = '';
 
   document.getElementById('modal-order-info').innerHTML = `
     <strong>${order.nombre_cliente}</strong> — ${order.producto}<br/>
     <span>📞 ${order.telefono}</span> &nbsp;|&nbsp;
-    <span>📍 ${order.ciudad_destino}</span> &nbsp;|&nbsp;
+    <span>📍 ${[order.direccion, order.ciudad_destino, order.departamento_destino].filter(Boolean).join(', ') || 'Sin dirección'}</span> &nbsp;|&nbsp;
     <span>Estado: ${order.estatus}</span>
+    ${order.requiere_llamada ? `<br/><span style="color:var(--amber)">Si hay corrección de dirección, registrar la llamada y luego actualizar Dropi.</span>` : ''}
     ${order.novedad ? `<br/><span style="color:var(--amber)">⚠ ${order.novedad}</span>` : ''}
   `;
 

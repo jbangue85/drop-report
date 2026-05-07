@@ -15,6 +15,7 @@ ACTIVE        = ("DESPACHADA", "EN REPARTO", "EN ESPERA DE RUTA DOMESTICA")
 NEEDS_ACTION  = ("PENDIENTE CONFIRMACION", "NOVEDAD")
 CANCELLED     = ("CANCELADO",)
 PENDING       = ("PENDIENTE",)
+FINALIZED     = ("ENTREGADO", "CANCELADO", "DEVOLUCION", "DEVOLUCION EN BODEGA")
 
 
 def _where(date_from=None, date_to=None, estatus=None, extra=""):
@@ -34,6 +35,96 @@ def _where(date_from=None, date_to=None, estatus=None, extra=""):
         conditions.append(extra)
     clause = "WHERE " + " AND ".join(conditions) if conditions else ""
     return clause, params
+
+
+def _action_text_blob(alias: str = "o") -> str:
+    return (
+        f"upper(COALESCE({alias}.ultimo_movimiento, '') || ' ' || "
+        f"COALESCE({alias}.concepto_ultimo_movimiento, '') || ' ' || "
+        f"COALESCE({alias}.ubicacion_ultimo_movimiento, '') || ' ' || "
+        f"COALESCE({alias}.novedad, ''))"
+    )
+
+
+def _stale_predicate(alias: str = "o", reference_now: Optional[str] = None) -> tuple[str, list]:
+    movement_dt = (
+        f"datetime(COALESCE({alias}.fecha_ultimo_movimiento, {alias}.fecha) || ' ' || "
+        f"COALESCE({alias}.hora_ultimo_movimiento, {alias}.hora, '00:00:00'))"
+    )
+    final_statuses = ",".join(f"'{s}'" for s in FINALIZED)
+    if reference_now:
+        return (
+            f"{alias}.estatus NOT IN ({final_statuses}) AND "
+            f"{movement_dt} <= datetime(?, '-24 hours')",
+            [reference_now],
+        )
+    return (
+        f"{alias}.estatus NOT IN ({final_statuses}) AND "
+        f"{movement_dt} <= datetime('now', '-24 hours')",
+        [],
+    )
+
+
+def _pending_office_predicate(alias: str = "o") -> str:
+    text_blob = _action_text_blob(alias)
+    patterns = (
+        "%RECLAMAR EN OFICINA%",
+        "%PENDIENTE POR RECIBIR EN OFICINA%",
+        "%RECIBIR EN OFICINA%",
+        "%RETIRO EN OFICINA%",
+        "%RECOGER EN OFICINA%",
+        "%DISPONIBLE PARA RECOGER%",
+        "%COORDINAR LA ENTREGA%",
+        "%NO HAY QUIEN RECIBA%",
+    )
+    conditions = " OR ".join(f"{text_blob} LIKE '{pattern}'" for pattern in patterns)
+    final_statuses = ",".join(f"'{s}'" for s in FINALIZED)
+    return f"{alias}.estatus NOT IN ({final_statuses}) AND ({conditions})"
+
+
+def _table_exists(conn: sqlite3.Connection, table_name: str) -> bool:
+    row = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?",
+        (table_name,),
+    ).fetchone()
+    return row is not None
+
+
+def _attention_rule_predicate(conn: sqlite3.Connection, alias: str = "o", category: Optional[str] = None) -> str:
+    if not _table_exists(conn, "attention_rules"):
+        return _pending_office_predicate(alias)
+
+    text_blob = _action_text_blob(alias)
+    category_filter = f"AND ar.category = '{category}'" if category else ""
+    final_statuses = ",".join(f"'{s}'" for s in FINALIZED)
+    return f"""
+        {alias}.estatus NOT IN ({final_statuses})
+        AND EXISTS (
+            SELECT 1
+            FROM attention_rules ar
+            WHERE ar.active = 1
+              AND ar.requires_call = 1
+              {category_filter}
+              AND (
+                ar.transportadora IS NULL
+                OR upper(ar.transportadora) = upper(COALESCE({alias}.transportadora, ''))
+              )
+              AND (
+                (ar.match_scope = 'estatus' AND upper(COALESCE({alias}.estatus, '')) LIKE '%' || upper(ar.match_text) || '%')
+                OR (ar.match_scope = 'novedad' AND upper(COALESCE({alias}.novedad, '')) LIKE '%' || upper(ar.match_text) || '%')
+                OR (ar.match_scope = 'movement' AND {text_blob} LIKE '%' || upper(ar.match_text) || '%')
+                OR (ar.match_scope = 'any' AND {text_blob} LIKE '%' || upper(ar.match_text) || '%')
+              )
+        )
+    """
+
+
+def _action_predicate(conn: sqlite3.Connection, alias: str = "o", reference_now: Optional[str] = None) -> tuple[str, list]:
+    stale_sql, stale_params = _stale_predicate(alias, reference_now)
+    rules_sql = _attention_rule_predicate(conn, alias)
+    base_statuses = ",".join(f"'{s}'" for s in NEEDS_ACTION)
+    predicate = f"({alias}.estatus IN ({base_statuses}) OR {stale_sql} OR {rules_sql})"
+    return predicate, stale_params
 
 
 KNOWN_ORDER_MARGIN_SQL = """
@@ -62,8 +153,9 @@ CONFIRMED_ORDER_MARGIN_SQL = f"""
 
 # ── KPIs ─────────────────────────────────────────────────────────────────────
 
-def calc_kpis(conn: sqlite3.Connection, date_from=None, date_to=None, estatus=None) -> dict:
+def calc_kpis(conn: sqlite3.Connection, date_from=None, date_to=None, estatus=None, reference_now: Optional[str] = None) -> dict:
     where, params = _where(date_from, date_to, estatus)
+    action_sql, action_params = _action_predicate(conn, "orders", reference_now)
     row = conn.execute(f"""
         SELECT
             COALESCE(SUM(total_orden), 0)                                          AS ingresos_brutos,
@@ -74,7 +166,7 @@ def calc_kpis(conn: sqlite3.Connection, date_from=None, date_to=None, estatus=No
             COUNT(CASE WHEN estatus = 'CANCELADO' THEN 1 END)                      AS cancelados,
             COUNT(CASE WHEN estatus IN ('DEVOLUCION', 'DEVOLUCION EN BODEGA') THEN 1 END) AS devoluciones,
             COUNT(CASE WHEN estatus NOT IN ('ENTREGADO', 'CANCELADO', 'DEVOLUCION', 'DEVOLUCION EN BODEGA') THEN 1 END) AS en_curso_logistico,
-            COUNT(CASE WHEN estatus IN ('PENDIENTE CONFIRMACION','NOVEDAD') THEN 1 END) AS requieren_accion,
+            COUNT(CASE WHEN {action_sql} THEN 1 END)                               AS requieren_accion,
             ROUND(
                 COUNT(CASE WHEN estatus = 'CANCELADO' THEN 1 END) * 100.0
                 / NULLIF(COUNT(*), 0),
@@ -100,7 +192,7 @@ def calc_kpis(conn: sqlite3.Connection, date_from=None, date_to=None, estatus=No
                 1
             )                                                                       AS tasa_cierre_logistico
         FROM orders {where}
-    """, params).fetchone()
+    """, action_params + params).fetchone()
 
     # Get ad spend (ignore estatus for ad spend)
     spend_where, spend_params = _where(date_from, date_to)
@@ -423,17 +515,33 @@ def calc_carrier_performance(conn, date_from=None, date_to=None) -> list:
 
 # ── Call Center ───────────────────────────────────────────────────────────────
 
-def get_action_orders(conn, date_from=None, date_to=None) -> list:
-    """Orders needing agent action: PENDIENTE CONFIRMACION + NOVEDAD."""
-    where, params = _where(date_from, date_to, estatus=list(NEEDS_ACTION))
+def get_action_orders(conn, date_from=None, date_to=None, reference_now: Optional[str] = None) -> list:
+    """Orders needing agent action: pending confirmation, novelties, stale logistics, office receipt follow-up."""
+    action_sql, action_params = _action_predicate(conn, "o", reference_now)
+    where, params = _where(date_from, date_to, extra=action_sql)
+    stale_sql, stale_params = _stale_predicate("o", reference_now)
+    rule_sql = _attention_rule_predicate(conn, "o")
+    office_sql = _attention_rule_predicate(conn, "o", category="office_pickup")
+    base_statuses = ",".join(f"'{s}'" for s in NEEDS_ACTION)
     rows = conn.execute(f"""
         SELECT
             o.id, o.fecha, o.hora, o.estatus,
             o.nombre_cliente, o.telefono,
             o.producto, o.variacion, o.cantidad,
-            o.ciudad_destino, o.departamento_destino,
+            o.ciudad_destino, o.departamento_destino, o.direccion,
             o.transportadora, o.numero_guia,
             o.novedad, o.total_orden, o.notas,
+            o.fecha_ultimo_movimiento, o.hora_ultimo_movimiento,
+            o.ultimo_movimiento, o.concepto_ultimo_movimiento, o.ubicacion_ultimo_movimiento,
+            CASE WHEN {stale_sql} THEN 1 ELSE 0 END AS sin_movimiento_24h,
+            CASE WHEN {rule_sql} THEN 1 ELSE 0 END AS regla_atencion,
+            CASE WHEN {office_sql} THEN 1 ELSE 0 END AS pendiente_recibir_oficina,
+            CASE WHEN o.estatus IN ({base_statuses}) OR {rule_sql} THEN 1 ELSE 0 END AS requiere_llamada,
+            CASE
+                WHEN o.estatus IN ({base_statuses}) OR {rule_sql} THEN 'llamada'
+                WHEN {stale_sql} THEN 'soporte'
+                ELSE 'gestion'
+            END AS tipo_gestion,
             cn.resultado      AS ultima_gestion,
             cn.notas          AS nota_llamada,
             cn.agent          AS agente,
@@ -448,11 +556,12 @@ def get_action_orders(conn, date_from=None, date_to=None) -> list:
         LEFT JOIN (
             SELECT order_id, COUNT(*) as intentos
             FROM call_notes
+            WHERE resultado IN ('CONTACTADO', 'NO_CONTESTO', 'BUZON', 'SOLUCIONADO', 'DEVOLUCION', 'OTRO')
             GROUP BY order_id
         ) cn_count ON cn_count.order_id = o.id
         {where}
-        ORDER BY o.estatus, o.fecha DESC
-    """, params).fetchall()
+        ORDER BY sin_movimiento_24h DESC, pendiente_recibir_oficina DESC, o.estatus, o.fecha DESC
+    """, stale_params + stale_params + params + action_params).fetchall()
     return [dict(r) for r in rows]
 
 

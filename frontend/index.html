@@ -241,11 +241,12 @@
       <div class="calls-header">
         <div>
           <h3>Órdenes que Requieren Gestión</h3>
-          <p class="calls-sub">Pendientes de confirmación y novedades activas. Registra el resultado de cada llamada.</p>
+          <p class="calls-sub">Pendientes de confirmación, novedades, pedidos sin movimiento y casos pendientes por recibir en oficina. Registra la gestión correspondiente.</p>
           <div style="margin-top: 1rem; display: flex; gap: 0.5rem;">
             <button class="btn btn-sm btn-primary call-filter-btn" data-filter="all">Todas</button>
             <button class="btn btn-sm btn-ghost call-filter-btn" data-filter="pending">Por Llamar</button>
-            <button class="btn btn-sm btn-ghost call-filter-btn" data-filter="ready">Listos para Dropi</button>
+            <button class="btn btn-sm btn-ghost call-filter-btn" data-filter="support">Soporte Dropi</button>
+            <button class="btn btn-sm btn-ghost call-filter-btn" data-filter="ready">Gestionados</button>
           </div>
         </div>
         <button id="calls-refresh-btn" class="btn btn-ghost btn-sm">↻ Actualizar</button>
@@ -417,14 +418,14 @@
 <div id="call-modal" class="modal-overlay hidden">
   <div class="modal-card">
     <div class="modal-header">
-      <h3>Registrar Gestión de Llamada</h3>
+      <h3 id="modal-title">Registrar Gestión</h3>
       <button id="modal-close" class="btn btn-ghost btn-icon">✕</button>
     </div>
     <div id="modal-order-info" class="modal-order-info"></div>
     <form id="call-note-form" class="modal-form">
       <input type="hidden" id="modal-order-id" />
       <div class="field-group">
-        <label for="modal-resultado">Resultado de la llamada</label>
+        <label for="modal-resultado">Resultado de la gestión</label>
         <select id="modal-resultado" class="select-input" required>
           <option value="">Seleccionar resultado...</option>
           <option value="CONTACTADO">✅ Contactado — confirmó pedido</option>
@@ -432,12 +433,13 @@
           <option value="NO_CONTESTO">📵 No contestó</option>
           <option value="BUZON">📨 Buzón de voz</option>
           <option value="DEVOLUCION">↩ Solicitó devolución</option>
+          <option value="SOPORTE_DROPI">🛠 Soporte Dropi — caso montado</option>
           <option value="OTRO">🔹 Otro (especificar en notas)</option>
         </select>
       </div>
       <div class="field-group">
         <label for="modal-notas">Notas adicionales</label>
-        <textarea id="modal-notas" placeholder="Ej: Cliente dice que lo recibe mañana en horario de tarde..." rows="3"></textarea>
+        <textarea id="modal-notas" placeholder="Ej: se verificó en Dropi y se montó caso de soporte..." rows="3"></textarea>
       </div>
       <div class="modal-actions">
         <button type="button" id="modal-cancel-btn" class="btn btn-ghost">Cancelar</button>

@@ -337,13 +337,13 @@ def calls_pending(
 
 class CallNoteRequest(BaseModel):
     order_id: int
-    resultado: str   # CONTACTADO | NO_CONTESTO | BUZON | SOLUCIONADO | DEVOLUCION | OTRO
+    resultado: str   # CONTACTADO | NO_CONTESTO | BUZON | SOLUCIONADO | DEVOLUCION | SOPORTE_DROPI | OTRO
     notas: Optional[str] = None
 
 
 @app.post("/api/calls/notes")
 def save_call_note(body: CallNoteRequest, user=Depends(get_current_user)):
-    valid = {"CONTACTADO", "NO_CONTESTO", "BUZON", "SOLUCIONADO", "DEVOLUCION", "OTRO"}
+    valid = {"CONTACTADO", "NO_CONTESTO", "BUZON", "SOLUCIONADO", "DEVOLUCION", "SOPORTE_DROPI", "OTRO"}
     if body.resultado not in valid:
         raise HTTPException(status_code=400, detail=f"resultado debe ser uno de: {valid}")
     conn = get_db()

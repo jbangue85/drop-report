@@ -1,7 +1,9 @@
 import sqlite3
 import os
+from pathlib import Path
 
 DB_PATH = os.getenv("DB_PATH", "/data/dropreport.db")
+MIGRATIONS_DIR = Path(__file__).with_name("migrations")
 
 CREATE_ORDERS = """
 CREATE TABLE IF NOT EXISTS orders (
@@ -123,6 +125,13 @@ CREATE TABLE IF NOT EXISTS product_projection_config (
 );
 """
 
+CREATE_SCHEMA_MIGRATIONS = """
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    version     TEXT PRIMARY KEY,
+    applied_at  TEXT DEFAULT (datetime('now'))
+);
+"""
+
 def get_db() -> sqlite3.Connection:
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -140,8 +149,29 @@ def init_db():
     conn.execute(CREATE_META_ADS_SPEND)
     conn.execute(CREATE_CAMPAIGN_MAP)
     conn.execute(CREATE_PRODUCT_PROJECTION_CONFIG)
+    run_migrations(conn)
     conn.commit()
     conn.close()
+
+
+def run_migrations(conn: sqlite3.Connection):
+    conn.execute(CREATE_SCHEMA_MIGRATIONS)
+    if not MIGRATIONS_DIR.exists():
+        return
+
+    applied = {
+        row["version"]
+        for row in conn.execute("SELECT version FROM schema_migrations").fetchall()
+    }
+    for path in sorted(MIGRATIONS_DIR.glob("*.sql")):
+        version = path.name
+        if version in applied:
+            continue
+        conn.executescript(path.read_text(encoding="utf-8"))
+        conn.execute(
+            "INSERT INTO schema_migrations (version) VALUES (?)",
+            (version,),
+        )
 
 
 def seed_admin_user(username: str, password_hash: str):
