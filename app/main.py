@@ -120,14 +120,20 @@ async def upload_file(
     conn = get_db()
     
     if file.filename.lower().endswith(".csv"):
-        from app.parser import parse_meta_csv, upsert_meta_spend
-        records = parse_meta_csv(content, file.filename)
+        from app.parser import InvalidMetaFileError, parse_meta_csv, upsert_meta_spend
+        try:
+            records = parse_meta_csv(content, file.filename)
+        except InvalidMetaFileError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
         if not records:
             raise HTTPException(status_code=422, detail="El CSV no contiene datos válidos de Meta Ads")
         count = upsert_meta_spend(conn, records)
     else:
-        from app.parser import parse_xlsx, upsert_records
-        records = parse_xlsx(content, file.filename)
+        from app.parser import InvalidDropiFileError, parse_xlsx, upsert_records
+        try:
+            records = parse_xlsx(content, file.filename)
+        except InvalidDropiFileError as exc:
+            raise HTTPException(status_code=422, detail=str(exc))
         if not records:
             raise HTTPException(status_code=422, detail="El archivo Excel no contiene datos válidos")
         count = upsert_records(conn, records)

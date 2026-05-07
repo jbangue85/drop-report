@@ -87,6 +87,7 @@ function showApp() {
   switchTab(getInitialTab(), { updateHash: false });
   loadDashboard();
   loadCallsPending();
+  loadUploadHistory();
 }
 
 document.getElementById('login-form').addEventListener('submit', async (e) => {
@@ -587,6 +588,8 @@ function setupUploadHandler(inputId) {
 setupUploadHandler('upload-dropi');
 setupUploadHandler('upload-meta');
 
+document.getElementById('upload-history-refresh')?.addEventListener('click', loadUploadHistory);
+
 async function doUpload(file) {
   const statusEl = document.getElementById('upload-status');
 
@@ -603,10 +606,51 @@ async function doUpload(file) {
     // Refresh everything
     loadDashboard();
     loadCallsPending();
+    loadUploadHistory();
   } catch (err) {
     statusEl.className = 'upload-status error';
     statusEl.textContent = `✗ Error: ${err.message}`;
   }
+}
+
+async function loadUploadHistory() {
+  const list = document.getElementById('upload-history-list');
+  if (!list) return;
+
+  try {
+    const uploads = await API.listUploads();
+    if (!uploads.length) {
+      list.innerHTML = '<span class="upload-history-empty">Sin cargas recientes</span>';
+      return;
+    }
+
+    list.innerHTML = uploads.slice(0, 6).map((upload) => {
+      const filename = upload.filename || '';
+      const type = filename.toLowerCase().endsWith('.csv') ? 'Meta Ads' : 'Dropi';
+      return `
+        <span class="upload-history-item" title="${filename}">
+          <strong>${type}</strong>
+          <span>${filename}</span>
+          <em>${upload.rows_upserted ?? 0} registros · ${formatUploadDate(upload.uploaded_at)}</em>
+        </span>
+      `;
+    }).join('');
+  } catch (err) {
+    list.innerHTML = `<span class="upload-history-empty">No se pudo cargar historial: ${err.message}</span>`;
+  }
+}
+
+function formatUploadDate(value) {
+  if (!value) return 'sin fecha';
+  const normalized = value.includes('T') ? value : value.replace(' ', 'T');
+  const dt = new Date(normalized);
+  if (Number.isNaN(dt.getTime())) return value;
+  return dt.toLocaleString('es-CO', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 

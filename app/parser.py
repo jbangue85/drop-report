@@ -58,6 +58,67 @@ COLUMN_MAP: Dict[str, str] = {
     "CONCEPTO ÚLTIMA INDENMIZACIÓN": "concepto_ultima_indemnizacion",
 }
 
+REQUIRED_DROPI_PRODUCT_HEADERS = {
+    "ID",
+    "FECHA",
+    "NOMBRE CLIENTE",
+    "TELÉFONO",
+    "NÚMERO GUIA",
+    "ESTATUS",
+    "DEPARTAMENTO DESTINO",
+    "CIUDAD DESTINO",
+    "DIRECCION",
+    "TRANSPORTADORA",
+    "TOTAL DE LA ORDEN",
+    "PRODUCTO ID",
+    "PRODUCTO",
+    "CANTIDAD",
+    "PRECIO PROVEEDOR X CANTIDAD",
+}
+
+
+class InvalidDropiFileError(ValueError):
+    pass
+
+
+class InvalidMetaFileError(ValueError):
+    pass
+
+
+def _normalize_header(value) -> str:
+    return str(value or "").strip()
+
+
+def _validate_dropi_product_headers(headers) -> None:
+    present = {_normalize_header(h) for h in headers if _normalize_header(h)}
+    missing = sorted(REQUIRED_DROPI_PRODUCT_HEADERS - present)
+    if missing:
+        raise InvalidDropiFileError(
+            "El archivo Dropi no tiene la estructura esperada de ordenes_productos. "
+            "Faltan columnas obligatorias: " + ", ".join(missing)
+        )
+
+
+def _validate_meta_headers(headers) -> str:
+    present = {_normalize_header(h) for h in headers if _normalize_header(h)}
+    spend_cols = sorted(h for h in present if "Importe gastado" in h)
+    required = {
+        "Inicio del informe",
+        "Fin del informe",
+        "Nombre de la campaña",
+        "Resultados",
+        "Indicador de resultado",
+    }
+    missing = sorted(required - present)
+    if not spend_cols:
+        missing.append("Importe gastado")
+    if missing:
+        raise InvalidMetaFileError(
+            "El archivo Meta Ads no tiene la estructura esperada del reporte de campañas. "
+            "Faltan columnas obligatorias: " + ", ".join(missing)
+        )
+    return spend_cols[0]
+
 
 def _normalize_date(value) -> "Optional[str]":
     """Convert DD-MM-YYYY to YYYY-MM-DD for SQLite date ordering."""
@@ -83,11 +144,14 @@ def parse_xlsx(file_bytes: bytes, filename: str) -> List[Dict[str, Any]]:
         return []
 
     raw_headers = rows[0]
+    _validate_dropi_product_headers(raw_headers)
+
     # Build index: db_field → column_index (skip unknown columns)
     col_index: Dict[str, int] = {}
     for i, h in enumerate(raw_headers):
-        if h and str(h).strip() in COLUMN_MAP:
-            db_field = COLUMN_MAP[str(h).strip()]
+        header = _normalize_header(h)
+        if header in COLUMN_MAP:
+            db_field = COLUMN_MAP[header]
             col_index[db_field] = i
 
     date_fields = {
@@ -138,15 +202,10 @@ def parse_meta_csv(file_bytes: bytes, filename: str) -> List[Dict[str, Any]]:
     
     text = file_bytes.decode('utf-8-sig', errors='replace')
     reader = csv.DictReader(io.StringIO(text))
+    spend_col = _validate_meta_headers(reader.fieldnames or [])
     
     records = []
     for row in reader:
-        # Find the spend column which might have different currencies like (COP) or (USD)
-        spend_col = next((col for col in row.keys() if col and "Importe gastado" in col), None)
-        
-        if "Inicio del informe" not in row or not spend_col:
-            continue
-            
         fecha_raw = row.get("Inicio del informe", "").strip()
         # Handle various Meta date formats (YYYY-MM-DD, DD/MM/YYYY, etc.)
         fecha = fecha_raw
@@ -244,4 +303,3 @@ def upsert_meta_spend(conn, records: List[Dict[str, Any]]) -> int:
 
     conn.commit()
     return len(records)
-
