@@ -16,7 +16,7 @@ class ActionOrdersTests(unittest.TestCase):
     def tearDown(self):
         self.conn.close()
 
-    def test_includes_orders_stale_for_more_than_24_hours(self):
+    def test_includes_orders_stale_for_more_than_48_business_hours(self):
         self.conn.execute(
             """
             INSERT INTO orders
@@ -26,15 +26,29 @@ class ActionOrdersTests(unittest.TestCase):
         )
         self.conn.commit()
 
-        rows = get_action_orders(self.conn, reference_now="2026-05-03 09:00:00")
+        rows = get_action_orders(self.conn, reference_now="2026-05-05 09:00:00")
 
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["id"], 1)
-        self.assertEqual(rows[0]["sin_movimiento_24h"], 1)
+        self.assertEqual(rows[0]["sin_movimiento_48h"], 1)
         self.assertEqual(rows[0]["pendiente_recibir_oficina"], 0)
         self.assertEqual(rows[0]["requiere_llamada"], 0)
         self.assertEqual(rows[0]["tipo_gestion"], "soporte")
         self.assertEqual(rows[0]["direccion"], "Calle 1 # 2-3")
+
+    def test_weekend_hours_do_not_count_as_stale_movement_time(self):
+        self.conn.execute(
+            """
+            INSERT INTO orders
+                (id, fecha, hora, estatus, fecha_ultimo_movimiento, hora_ultimo_movimiento, nombre_cliente)
+            VALUES (6, '2026-05-01', '18:00:00', 'DESPACHADA', '2026-05-01', '18:00:00', 'Cliente F')
+            """
+        )
+        self.conn.commit()
+
+        rows = get_action_orders(self.conn, reference_now="2026-05-04 10:00:00")
+
+        self.assertEqual(rows, [])
 
     def test_includes_orders_pending_office_receipt(self):
         self.conn.execute(
@@ -51,7 +65,7 @@ class ActionOrdersTests(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["id"], 2)
         self.assertEqual(rows[0]["pendiente_recibir_oficina"], 1)
-        self.assertEqual(rows[0]["sin_movimiento_24h"], 0)
+        self.assertEqual(rows[0]["sin_movimiento_48h"], 0)
         self.assertEqual(rows[0]["requiere_llamada"], 1)
         self.assertEqual(rows[0]["tipo_gestion"], "llamada")
 
@@ -87,7 +101,7 @@ class ActionOrdersTests(unittest.TestCase):
         )
         self.conn.commit()
 
-        rows = get_action_orders(self.conn, reference_now="2026-05-03 09:00:00")
+        rows = get_action_orders(self.conn, reference_now="2026-05-05 09:00:00")
 
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["ultima_gestion"], "SOPORTE_DROPI")
@@ -114,7 +128,7 @@ class ActionOrdersTests(unittest.TestCase):
             self.conn,
             "2026-05-01",
             "2026-05-01",
-            reference_now="2026-05-03 12:00:00",
+            reference_now="2026-05-05 12:00:00",
         )
 
         self.assertEqual(kpis["requieren_accion"], 3)

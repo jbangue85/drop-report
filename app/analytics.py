@@ -1,5 +1,6 @@
 import sqlite3
 import os
+from datetime import datetime, time, timedelta
 from typing import Optional
 
 def _get_iva_factor():
@@ -16,6 +17,7 @@ NEEDS_ACTION  = ("PENDIENTE CONFIRMACION", "NOVEDAD")
 CANCELLED     = ("CANCELADO",)
 PENDING       = ("PENDIENTE",)
 FINALIZED     = ("ENTREGADO", "CANCELADO", "DEVOLUCION", "DEVOLUCION EN BODEGA")
+STALE_BUSINESS_HOURS = 48
 
 
 def _where(date_from=None, date_to=None, estatus=None, extra=""):
@@ -46,6 +48,46 @@ def _action_text_blob(alias: str = "o") -> str:
     )
 
 
+def _parse_datetime(value: Optional[str]) -> Optional[datetime]:
+    if not value:
+        return None
+    normalized = str(value).strip().replace("T", " ")
+    for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(normalized, fmt)
+        except ValueError:
+            continue
+    try:
+        return datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+
+
+def _business_hours_elapsed(start_value: Optional[str], end_value: Optional[str]) -> float:
+    start = _parse_datetime(start_value)
+    end = _parse_datetime(end_value)
+    if not start or not end or end <= start:
+        return 0.0
+
+    total_seconds = 0.0
+    day = start.date()
+    while day <= end.date():
+        if day.weekday() < 5:
+            day_start = datetime.combine(day, time.min)
+            day_end = day_start + timedelta(days=1)
+            overlap_start = max(start, day_start)
+            overlap_end = min(end, day_end)
+            if overlap_end > overlap_start:
+                total_seconds += (overlap_end - overlap_start).total_seconds()
+        day += timedelta(days=1)
+
+    return total_seconds / 3600
+
+
+def _ensure_business_hours_function(conn: sqlite3.Connection):
+    conn.create_function("business_hours_elapsed", 2, _business_hours_elapsed)
+
+
 def _stale_predicate(alias: str = "o", reference_now: Optional[str] = None) -> tuple[str, list]:
     movement_dt = (
         f"datetime(COALESCE({alias}.fecha_ultimo_movimiento, {alias}.fecha) || ' ' || "
@@ -55,12 +97,12 @@ def _stale_predicate(alias: str = "o", reference_now: Optional[str] = None) -> t
     if reference_now:
         return (
             f"{alias}.estatus NOT IN ({final_statuses}) AND "
-            f"{movement_dt} <= datetime(?, '-24 hours')",
+            f"business_hours_elapsed({movement_dt}, ?) >= {STALE_BUSINESS_HOURS}",
             [reference_now],
         )
     return (
         f"{alias}.estatus NOT IN ({final_statuses}) AND "
-        f"{movement_dt} <= datetime('now', '-24 hours')",
+        f"business_hours_elapsed({movement_dt}, datetime('now')) >= {STALE_BUSINESS_HOURS}",
         [],
     )
 
@@ -120,6 +162,7 @@ def _attention_rule_predicate(conn: sqlite3.Connection, alias: str = "o", catego
 
 
 def _action_predicate(conn: sqlite3.Connection, alias: str = "o", reference_now: Optional[str] = None) -> tuple[str, list]:
+    _ensure_business_hours_function(conn)
     stale_sql, stale_params = _stale_predicate(alias, reference_now)
     rules_sql = _attention_rule_predicate(conn, alias)
     base_statuses = ",".join(f"'{s}'" for s in NEEDS_ACTION)
@@ -533,7 +576,7 @@ def get_action_orders(conn, date_from=None, date_to=None, reference_now: Optiona
             o.novedad, o.total_orden, o.notas,
             o.fecha_ultimo_movimiento, o.hora_ultimo_movimiento,
             o.ultimo_movimiento, o.concepto_ultimo_movimiento, o.ubicacion_ultimo_movimiento,
-            CASE WHEN {stale_sql} THEN 1 ELSE 0 END AS sin_movimiento_24h,
+            CASE WHEN {stale_sql} THEN 1 ELSE 0 END AS sin_movimiento_48h,
             CASE WHEN {rule_sql} THEN 1 ELSE 0 END AS regla_atencion,
             CASE WHEN {office_sql} THEN 1 ELSE 0 END AS pendiente_recibir_oficina,
             CASE WHEN o.estatus IN ({base_statuses}) OR {rule_sql} THEN 1 ELSE 0 END AS requiere_llamada,
@@ -560,7 +603,7 @@ def get_action_orders(conn, date_from=None, date_to=None, reference_now: Optiona
             GROUP BY order_id
         ) cn_count ON cn_count.order_id = o.id
         {where}
-        ORDER BY sin_movimiento_24h DESC, pendiente_recibir_oficina DESC, o.estatus, o.fecha DESC
+        ORDER BY sin_movimiento_48h DESC, pendiente_recibir_oficina DESC, o.estatus, o.fecha DESC
     """, stale_params + stale_params + params + action_params).fetchall()
     return [dict(r) for r in rows]
 

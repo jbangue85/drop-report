@@ -641,8 +641,8 @@ function renderCalls(data) {
 
   const actionChips = (order) => {
     const chips = [];
-    if (order.sin_movimiento_24h) {
-      chips.push('<span class="chip chip-red">+24h: verificar Dropi/soporte</span>');
+    if (order.sin_movimiento_48h) {
+      chips.push('<span class="chip chip-red">+48h hábiles: verificar Dropi/soporte</span>');
     }
     if (order.pendiente_recibir_oficina) {
       chips.push('<span class="chip chip-amber">Pendiente recibir en oficina</span>');
@@ -695,9 +695,9 @@ function renderCalls(data) {
           <span>🗓 ${formatIsoDate(o.fecha)}</span>
         </div>
         ${o.novedad ? `<div class="call-meta" style="color:var(--amber)">⚠ Novedad: ${o.novedad}</div>` : ''}
-        ${(o.sin_movimiento_24h || o.pendiente_recibir_oficina) ? `
+        ${(o.sin_movimiento_48h || o.pendiente_recibir_oficina) ? `
           <div class="call-meta" style="margin-top: 6px;">
-            ${o.sin_movimiento_24h ? `<span>⏱ Último movimiento: ${formatDatetime([o.fecha_ultimo_movimiento, o.hora_ultimo_movimiento].filter(Boolean).join('T')) || 'Sin fecha'}</span><span>Verificar en Dropi y montar caso de soporte si aplica</span>` : ''}
+            ${o.sin_movimiento_48h ? `<span>⏱ Último movimiento: ${formatDatetime([o.fecha_ultimo_movimiento, o.hora_ultimo_movimiento].filter(Boolean).join('T')) || 'Sin fecha'}</span><span>48h hábiles sin movimiento: verificar en Dropi y montar caso de soporte si aplica</span>` : ''}
             ${o.pendiente_recibir_oficina ? `<span>📦 Revisar recepción en oficina</span>` : ''}
           </div>
         ` : ''}
