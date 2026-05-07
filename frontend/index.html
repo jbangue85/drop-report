@@ -64,6 +64,10 @@
         <span class="nav-icon">🔗</span>
         <span>Asignación Campañas</span>
       </a>
+      <a href="#" class="nav-item" data-tab="uploads" id="nav-uploads">
+        <span class="nav-icon">📤</span>
+        <span>Cargas</span>
+      </a>
       <a href="#" class="nav-item hidden" data-tab="projection" id="nav-projection">
         <span class="nav-icon">🧮</span>
         <span>Supuestos</span>
@@ -128,17 +132,6 @@
         </div>
       </div>
     </header>
-
-    <section class="upload-history-bar">
-      <div>
-        <span class="upload-history-title">Últimas cargas</span>
-        <span class="upload-history-sub">Dropi y Meta Ads</span>
-      </div>
-      <div id="upload-history-list" class="upload-history-list">
-        <span class="upload-history-empty">Sin cargas recientes</span>
-      </div>
-      <button id="upload-history-refresh" class="btn btn-ghost btn-sm" type="button">↻</button>
-    </section>
 
     <!-- ══════════════ DASHBOARD TAB ══════════════ -->
     <section id="tab-dashboard" class="tab-content active">
@@ -265,6 +258,33 @@
 
       <div id="calls-list" class="calls-list">
         <div class="empty-state">Cargando...</div>
+      </div>
+    </section>
+
+    <!-- ══════════════ UPLOADS TAB ══════════════ -->
+    <section id="tab-uploads" class="tab-content hidden">
+      <div class="calls-header">
+        <div>
+          <h3>Historial de Cargas</h3>
+          <p class="calls-sub">Verifica los archivos de Dropi y Meta Ads procesados recientemente.</p>
+        </div>
+        <button id="upload-history-refresh" class="btn btn-ghost btn-sm" type="button">↻ Actualizar</button>
+      </div>
+
+      <div class="chart-card table-wrap">
+        <table class="data-table" id="uploads-table">
+          <thead>
+            <tr>
+              <th>Tipo</th>
+              <th>Archivo</th>
+              <th>Registros</th>
+              <th>Fecha de carga</th>
+            </tr>
+          </thead>
+          <tbody id="upload-history-body">
+            <tr><td colspan="4" class="empty-row">Sin cargas recientes</td></tr>
+          </tbody>
+        </table>
       </div>
     </section>
 

@@ -565,66 +565,6 @@ input, select, textarea { font-family: inherit; }
 }
 .upload-status.error { background: var(--red-dim); color: var(--red); border-color: rgba(239,68,68,.25); }
 
-.upload-history-bar {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 1rem;
-  padding: .65rem 1.5rem;
-  border-bottom: 1px solid var(--border);
-  background: rgba(15, 23, 42, .45);
-}
-.upload-history-title {
-  display: block;
-  color: var(--text-1);
-  font-size: .78rem;
-  font-weight: 700;
-}
-.upload-history-sub {
-  color: var(--text-3);
-  font-size: .72rem;
-}
-.upload-history-list {
-  display: flex;
-  align-items: stretch;
-  gap: .5rem;
-  min-width: 0;
-  overflow-x: auto;
-  padding-bottom: .1rem;
-}
-.upload-history-item {
-  min-width: 180px;
-  max-width: 260px;
-  padding: .45rem .6rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: rgba(255,255,255,.04);
-  color: var(--text-2);
-  font-size: .72rem;
-}
-.upload-history-item strong {
-  display: block;
-  color: var(--text-1);
-  font-size: .74rem;
-}
-.upload-history-item span {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.upload-history-item em {
-  display: block;
-  color: var(--text-3);
-  font-style: normal;
-  margin-top: .15rem;
-}
-.upload-history-empty {
-  color: var(--text-3);
-  font-size: .78rem;
-  align-self: center;
-}
-
 /* ── Modal ──────────────────────────────────────────────────────── */
 .modal-overlay {
   position: fixed;

@@ -25,13 +25,14 @@ function startOfWeekMonday(date) {
 }
 
 const todayLocal = new Date();
-const VALID_TABS = new Set(['dashboard', 'calls', 'control', 'mappings', 'projection', 'users']);
+const VALID_TABS = new Set(['dashboard', 'calls', 'control', 'mappings', 'uploads', 'projection', 'users']);
 const TAB_TITLES = {
   dashboard: 'Dashboard',
   calls: 'Gestión Operativa',
   users: 'Gestión de Usuarios',
   control: 'Control Diario',
   mappings: 'Asignación de Campañas',
+  uploads: 'Historial de Cargas',
   projection: 'Supuestos de Proyección',
 };
 const FILTER_STORAGE_KEY = 'dr_filters';
@@ -87,7 +88,6 @@ function showApp() {
   switchTab(getInitialTab(), { updateHash: false });
   loadDashboard();
   loadCallsPending();
-  loadUploadHistory();
 }
 
 document.getElementById('login-form').addEventListener('submit', async (e) => {
@@ -166,6 +166,8 @@ function switchTab(tab, options = {}) {
     loadUsers();
   } else if (tab === 'mappings') {
     loadMappings();
+  } else if (tab === 'uploads') {
+    loadUploadHistory();
   } else if (tab === 'projection') {
     loadProjectionConfigs();
   }
@@ -614,29 +616,30 @@ async function doUpload(file) {
 }
 
 async function loadUploadHistory() {
-  const list = document.getElementById('upload-history-list');
-  if (!list) return;
+  const tbody = document.getElementById('upload-history-body');
+  if (!tbody) return;
 
   try {
     const uploads = await API.listUploads();
     if (!uploads.length) {
-      list.innerHTML = '<span class="upload-history-empty">Sin cargas recientes</span>';
+      tbody.innerHTML = '<tr><td colspan="4" class="empty-row">Sin cargas recientes</td></tr>';
       return;
     }
 
-    list.innerHTML = uploads.slice(0, 6).map((upload) => {
+    tbody.innerHTML = uploads.map((upload) => {
       const filename = upload.filename || '';
       const type = filename.toLowerCase().endsWith('.csv') ? 'Meta Ads' : 'Dropi';
       return `
-        <span class="upload-history-item" title="${filename}">
-          <strong>${type}</strong>
-          <span>${filename}</span>
-          <em>${upload.rows_upserted ?? 0} registros · ${formatUploadDate(upload.uploaded_at)}</em>
-        </span>
+        <tr>
+          <td><span class="chip ${type === 'Meta Ads' ? 'chip-blue' : 'chip-green'}">${type}</span></td>
+          <td title="${filename}" style="font-weight:500">${filename}</td>
+          <td>${upload.rows_upserted ?? 0}</td>
+          <td>${formatUploadDate(upload.uploaded_at)}</td>
+        </tr>
       `;
     }).join('');
   } catch (err) {
-    list.innerHTML = `<span class="upload-history-empty">No se pudo cargar historial: ${err.message}</span>`;
+    tbody.innerHTML = `<tr><td colspan="4" class="empty-row">No se pudo cargar historial: ${err.message}</td></tr>`;
   }
 }
 
