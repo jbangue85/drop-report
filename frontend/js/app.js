@@ -28,7 +28,7 @@ const todayLocal = new Date();
 const VALID_TABS = new Set(['dashboard', 'calls', 'control', 'mappings', 'projection', 'users']);
 const TAB_TITLES = {
   dashboard: 'Dashboard',
-  calls: 'Panel de Llamadas',
+  calls: 'Gestión Operativa',
   users: 'Gestión de Usuarios',
   control: 'Control Diario',
   mappings: 'Asignación de Campañas',
@@ -659,7 +659,7 @@ function renderCalls(data) {
     return parts.length ? parts.join(', ') : 'Sin dirección';
   };
 
-  const jsString = (value) => JSON.stringify(value).replace(/"/g, '&quot;');
+  const jsString = (value) => JSON.stringify(String(value)).replace(/"/g, '&quot;');
 
   container.innerHTML = filtered.map(o => {
     let dropiWarning = '';
@@ -682,11 +682,11 @@ function renderCalls(data) {
         </div>
         <div class="call-phone">
           📞 ${o.telefono || 'Sin teléfono'}
-          <button class="btn-ghost btn-icon" style="padding: 2px 6px; font-size: 14px; margin-left: 4px;" title="Copiar ID para Dropi" onclick="navigator.clipboard.writeText('${o.id}'); alert('ID ${o.id} copiado al portapapeles. ¡Pégalo en Dropi!');">📋 Copiar ID: ${o.id}</button>
+          <button class="btn-ghost btn-icon" style="padding: 2px 6px; font-size: 14px; margin-left: 4px;" title="Copiar ID para Dropi" onclick="copyToClipboard(${jsString(o.id)}, 'ID ${o.id} copiado al portapapeles. Pégalo en Dropi.')">📋 Copiar ID: ${o.id}</button>
         </div>
         <div class="call-meta" style="color:var(--text-1); margin-top: 6px;">
           <span>📍 Dirección: ${fullAddress(o)}</span>
-          ${o.direccion ? `<button class="btn-ghost btn-icon" style="padding: 2px 6px; font-size: 14px;" title="Copiar dirección" onclick="navigator.clipboard.writeText(${jsString(fullAddress(o))}); alert('Dirección copiada al portapapeles.');">📋 Copiar</button>` : ''}
+          ${o.direccion ? `<button class="btn-ghost btn-icon" style="padding: 2px 6px; font-size: 14px;" title="Copiar dirección" onclick="copyToClipboard(${jsString(fullAddress(o))}, 'Dirección copiada al portapapeles.')">📋 Copiar</button>` : ''}
         </div>
         <div class="call-meta">
           <span>📦 ${o.producto || '—'} × ${o.cantidad || 1}</span>
@@ -784,6 +784,33 @@ function formatIsoDate(iso) {
 function formatDatetime(dt) {
   if (!dt) return '—';
   return dt.replace('T', ' ').substring(0, 16);
+}
+
+async function copyToClipboard(text, successMessage = 'Copiado al portapapeles.') {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+    } else {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.left = '-9999px';
+      textarea.style.top = '0';
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+
+      const copied = document.execCommand('copy');
+      document.body.removeChild(textarea);
+      if (!copied) throw new Error('copy command failed');
+    }
+
+    alert(successMessage);
+  } catch (err) {
+    console.error('Clipboard copy failed:', err);
+    alert('No se pudo copiar automáticamente. Selecciona el texto y cópialo manualmente.');
+  }
 }
 
 /* ═══════════════════════════ USERS MANAGEMENT ═════════════════════ */
