@@ -34,14 +34,18 @@ const TAB_TITLES = {
   mappings: 'Asignación de Campañas',
   projection: 'Supuestos de Proyección',
 };
+const FILTER_STORAGE_KEY = 'dr_filters';
+const DEFAULT_FILTER_PRESET = '30d';
+const DEFAULT_FILTERS = {
+  preset: DEFAULT_FILTER_PRESET,
+  date_from: formatLocalDate(shiftDays(todayLocal, -29)),
+  date_to: formatLocalDate(todayLocal),
+  estatus: null,
+};
 
 /* ═══════════════════════════ STATE ═════════════════════════════════ */
 const state = {
-  filters: { 
-    date_from: formatLocalDate(shiftDays(todayLocal, -29)),
-    date_to: formatLocalDate(todayLocal),
-    estatus: null 
-  },
+  filters: { ...DEFAULT_FILTERS },
   activeTab: 'dashboard',
   currentUser: null,
   callFilter: 'all',
@@ -78,6 +82,7 @@ function showApp() {
     }
   } catch (_) {}
 
+  restoreFilters();
   initFilters();
   switchTab(getInitialTab(), { updateHash: false });
   loadDashboard();
@@ -166,6 +171,42 @@ function switchTab(tab, options = {}) {
 }
 
 /* ═══════════════════════════ FILTERS ══════════════════════════════ */
+function saveFilters() {
+  localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(state.filters));
+}
+
+function restoreFilters() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(FILTER_STORAGE_KEY) || '{}');
+    state.filters = {
+      ...DEFAULT_FILTERS,
+      ...saved,
+      preset: saved.preset || DEFAULT_FILTER_PRESET,
+      estatus: saved.estatus || null,
+    };
+  } catch (_) {
+    state.filters = { ...DEFAULT_FILTERS };
+  }
+
+  syncFilterControls();
+}
+
+function syncFilterControls() {
+  const preset = document.getElementById('filter-preset');
+  const df = document.getElementById('filter-date-from');
+  const dt = document.getElementById('filter-date-to');
+  const estatus = document.getElementById('filter-estatus');
+
+  preset.value = state.filters.preset || DEFAULT_FILTER_PRESET;
+  df.value = state.filters.date_from || '';
+  dt.value = state.filters.date_to || '';
+  estatus.value = state.filters.estatus || '';
+
+  const custom = preset.value === 'custom';
+  df.classList.toggle('hidden', !custom);
+  dt.classList.toggle('hidden', !custom);
+}
+
 async function initFilters() {
   try {
     const opts = await API.getFilterOptions();
@@ -177,6 +218,7 @@ async function initFilters() {
       opt.textContent = s;
       sel.appendChild(opt);
     });
+    syncFilterControls();
   } catch (_) {}
 }
 
@@ -184,6 +226,7 @@ document.getElementById('filter-preset').addEventListener('change', (e) => {
   const df = document.getElementById('filter-date-from');
   const dt = document.getElementById('filter-date-to');
   const val = e.target.value;
+  state.filters.preset = val;
 
   df.classList.add('hidden');
   dt.classList.add('hidden');
@@ -217,21 +260,29 @@ document.getElementById('filter-preset').addEventListener('change', (e) => {
   } else if (val === 'custom') {
     df.classList.remove('hidden');
     dt.classList.remove('hidden');
+    syncFilterControls();
+    saveFilters();
     return;
   }
 
+  syncFilterControls();
+  saveFilters();
   loadDashboard();
 });
 
 ['filter-date-from', 'filter-date-to'].forEach(id => {
   document.getElementById(id).addEventListener('change', (e) => {
+    state.filters.preset = 'custom';
     state.filters[id === 'filter-date-from' ? 'date_from' : 'date_to'] = e.target.value || null;
+    syncFilterControls();
+    saveFilters();
     loadDashboard();
   });
 });
 
 document.getElementById('filter-estatus').addEventListener('change', (e) => {
   state.filters.estatus = e.target.value || null;
+  saveFilters();
   loadDashboard();
 });
 
