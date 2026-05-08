@@ -90,18 +90,20 @@ def _ensure_business_hours_function(conn: sqlite3.Connection):
 
 def _stale_predicate(alias: str = "o", reference_now: Optional[str] = None) -> tuple[str, list]:
     movement_dt = (
-        f"datetime(COALESCE({alias}.fecha_ultimo_movimiento, {alias}.fecha) || ' ' || "
-        f"COALESCE({alias}.hora_ultimo_movimiento, {alias}.hora, '00:00:00'))"
+        f"datetime({alias}.fecha_ultimo_movimiento || ' ' || "
+        f"COALESCE({alias}.hora_ultimo_movimiento, '00:00:00'))"
     )
     final_statuses = ",".join(f"'{s}'" for s in FINALIZED)
     if reference_now:
         return (
             f"{alias}.estatus NOT IN ({final_statuses}) AND "
+            f"{alias}.fecha_ultimo_movimiento IS NOT NULL AND "
             f"business_hours_elapsed({movement_dt}, ?) >= {STALE_BUSINESS_HOURS}",
             [reference_now],
         )
     return (
         f"{alias}.estatus NOT IN ({final_statuses}) AND "
+        f"{alias}.fecha_ultimo_movimiento IS NOT NULL AND "
         f"business_hours_elapsed({movement_dt}, datetime('now')) >= {STALE_BUSINESS_HOURS}",
         [],
     )

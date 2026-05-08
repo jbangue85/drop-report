@@ -50,6 +50,20 @@ class ActionOrdersTests(unittest.TestCase):
 
         self.assertEqual(rows, [])
 
+    def test_order_date_does_not_count_as_last_movement_fallback(self):
+        self.conn.execute(
+            """
+            INSERT INTO orders
+                (id, fecha, hora, estatus, nombre_cliente)
+            VALUES (7, '2026-05-01', '08:00:00', 'DESPACHADA', 'Cliente G')
+            """
+        )
+        self.conn.commit()
+
+        rows = get_action_orders(self.conn, reference_now="2026-05-08 12:00:00")
+
+        self.assertEqual(rows, [])
+
     def test_includes_orders_pending_office_receipt(self):
         self.conn.execute(
             """

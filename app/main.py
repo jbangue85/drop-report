@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 load_dotenv()  # Load .env before anything reads os.getenv()
 
 import os
+from datetime import datetime
 from typing import Optional, List
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Query, Request
@@ -21,6 +22,7 @@ from .analytics import (
     get_projection_configs,
     get_action_orders,
     get_filter_options,
+    _business_hours_elapsed,
 )
 from .auth import hash_password, verify_password, create_token, decode_token
 
@@ -339,6 +341,61 @@ def calls_pending(
     result = get_action_orders(conn, date_from, date_to)
     conn.close()
     return result
+
+
+@app.get("/api/admin/action-orders/diagnostics")
+def action_orders_diagnostics(admin=Depends(require_admin)):
+    conn = get_db()
+    rows = get_action_orders(conn)
+    conn.close()
+
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    details = []
+    for row in rows:
+        movement_at = " ".join(
+            part
+            for part in [
+                row.get("fecha_ultimo_movimiento"),
+                row.get("hora_ultimo_movimiento"),
+            ]
+            if part
+        ) or None
+        reasons = []
+        if row.get("sin_movimiento_48h"):
+            reasons.append("48h_habiles_sin_movimiento")
+        if row.get("regla_atencion"):
+            reasons.append("regla_atencion")
+        if row.get("pendiente_recibir_oficina"):
+            reasons.append("recibir_oficina")
+        if row.get("estatus") in {"PENDIENTE CONFIRMACION", "NOVEDAD"}:
+            reasons.append("estatus_base")
+
+        details.append({
+            "id": row.get("id"),
+            "estatus": row.get("estatus"),
+            "transportadora": row.get("transportadora"),
+            "novedad": row.get("novedad"),
+            "tipo_gestion": row.get("tipo_gestion"),
+            "requiere_llamada": bool(row.get("requiere_llamada")),
+            "sin_movimiento_48h": bool(row.get("sin_movimiento_48h")),
+            "regla_atencion": bool(row.get("regla_atencion")),
+            "pendiente_recibir_oficina": bool(row.get("pendiente_recibir_oficina")),
+            "ultimo_movimiento_en": movement_at,
+            "horas_habiles_sin_movimiento": round(
+                _business_hours_elapsed(movement_at, now),
+                1,
+            ) if movement_at else 0,
+            "razones": reasons,
+        })
+
+    return {
+        "generated_at": now,
+        "total": len(details),
+        "sin_movimiento_48h": sum(1 for row in details if row["sin_movimiento_48h"]),
+        "requieren_llamada": sum(1 for row in details if row["requiere_llamada"]),
+        "recibir_oficina": sum(1 for row in details if row["pendiente_recibir_oficina"]),
+        "orders": details,
+    }
 
 
 class CallNoteRequest(BaseModel):
