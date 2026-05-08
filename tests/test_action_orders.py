@@ -1,7 +1,7 @@
 import sqlite3
 import unittest
 
-from app.analytics import calc_kpis, get_action_orders
+from app.analytics import _app_now, calc_kpis, get_action_orders
 from app.database import CREATE_CALL_NOTES, CREATE_META_ADS_SPEND, CREATE_ORDERS
 
 
@@ -49,6 +49,11 @@ class ActionOrdersTests(unittest.TestCase):
         rows = get_action_orders(self.conn, reference_now="2026-05-04 10:00:00")
 
         self.assertEqual(rows, [])
+
+    def test_app_now_uses_colombia_timezone_for_implicit_stale_checks(self):
+        now = _app_now()
+
+        self.assertRegex(now, r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$")
 
     def test_order_date_does_not_count_as_last_movement_fallback(self):
         self.conn.execute(

@@ -1,7 +1,8 @@
 import sqlite3
 import os
-from datetime import datetime, time, timedelta
+from datetime import datetime, time, timedelta, timezone
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 def _get_iva_factor():
     try:
@@ -18,6 +19,7 @@ CANCELLED     = ("CANCELADO",)
 PENDING       = ("PENDIENTE",)
 FINALIZED     = ("ENTREGADO", "CANCELADO", "DEVOLUCION", "DEVOLUCION EN BODEGA")
 STALE_BUSINESS_HOURS = 48
+APP_TIMEZONE = os.environ.get("APP_TIMEZONE", "America/Bogota")
 
 
 def _where(date_from=None, date_to=None, estatus=None, extra=""):
@@ -84,8 +86,17 @@ def _business_hours_elapsed(start_value: Optional[str], end_value: Optional[str]
     return total_seconds / 3600
 
 
+def _app_now() -> str:
+    try:
+        tz = ZoneInfo(APP_TIMEZONE)
+    except Exception:
+        tz = timezone(timedelta(hours=-5))
+    return datetime.now(tz).replace(tzinfo=None).strftime("%Y-%m-%d %H:%M:%S")
+
+
 def _ensure_business_hours_function(conn: sqlite3.Connection):
     conn.create_function("business_hours_elapsed", 2, _business_hours_elapsed)
+    conn.create_function("app_now", 0, _app_now)
 
 
 def _stale_predicate(alias: str = "o", reference_now: Optional[str] = None) -> tuple[str, list]:
@@ -104,7 +115,7 @@ def _stale_predicate(alias: str = "o", reference_now: Optional[str] = None) -> t
     return (
         f"{alias}.estatus NOT IN ({final_statuses}) AND "
         f"{alias}.fecha_ultimo_movimiento IS NOT NULL AND "
-        f"business_hours_elapsed({movement_dt}, datetime('now')) >= {STALE_BUSINESS_HOURS}",
+        f"business_hours_elapsed({movement_dt}, app_now()) >= {STALE_BUSINESS_HOURS}",
         [],
     )
 

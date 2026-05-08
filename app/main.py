@@ -2,7 +2,6 @@ from dotenv import load_dotenv
 load_dotenv()  # Load .env before anything reads os.getenv()
 
 import os
-from datetime import datetime
 from typing import Optional, List
 
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends, Query, Request
@@ -22,6 +21,7 @@ from .analytics import (
     get_projection_configs,
     get_action_orders,
     get_filter_options,
+    _app_now,
     _business_hours_elapsed,
 )
 from .auth import hash_password, verify_password, create_token, decode_token
@@ -349,7 +349,7 @@ def action_orders_diagnostics(admin=Depends(require_admin)):
     rows = get_action_orders(conn)
     conn.close()
 
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now = _app_now()
     details = []
     for row in rows:
         movement_at = " ".join(
