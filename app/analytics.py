@@ -639,7 +639,7 @@ def reconcile_cartera(conn: sqlite3.Connection, cartera_records: list[dict]) -> 
             """
             SELECT
                 id, fecha, estatus, numero_guia, nombre_cliente, producto,
-                total_orden, ganancia
+                tipo_envio, total_orden, ganancia
             FROM orders
             """
         ).fetchall()
@@ -651,7 +651,7 @@ def reconcile_cartera(conn: sqlite3.Connection, cartera_records: list[dict]) -> 
             """
             SELECT
                 id, fecha, estatus, numero_guia, nombre_cliente, producto,
-                total_orden, ganancia
+                tipo_envio, total_orden, ganancia
             FROM orders
             WHERE estatus = 'ENTREGADO'
             ORDER BY fecha DESC, id DESC
@@ -659,13 +659,22 @@ def reconcile_cartera(conn: sqlite3.Connection, cartera_records: list[dict]) -> 
         ).fetchall()
     ]
 
+    def is_without_collection(order: dict) -> bool:
+        return "SIN RECAUDO" in str(order.get("tipo_envio") or "").upper()
+
     missing_in_cartera = [
         {
             **row,
             "diferencia_monto": None,
         }
         for row in delivered_rows
-        if row["id"] not in paid_order_ids
+        if row["id"] not in paid_order_ids and not is_without_collection(row)
+    ]
+
+    delivered_without_collection = [
+        row
+        for row in delivered_rows
+        if row["id"] not in paid_order_ids and is_without_collection(row)
     ]
 
     paid_not_in_db = [
@@ -712,12 +721,14 @@ def reconcile_cartera(conn: sqlite3.Connection, cartera_records: list[dict]) -> 
             "ordenes_entregadas": len(delivered_rows),
             "cruzadas_entregadas": matched,
             "faltan_en_cartera": len(missing_in_cartera),
+            "sin_recaudo_sin_pago": len(delivered_without_collection),
             "pagadas_no_existen": len(paid_not_in_db),
             "pagadas_no_entregadas": len(paid_not_delivered),
             "diferencias_monto": len(amount_differences),
             "ordenes_duplicadas_en_cartera": len(duplicate_order_ids),
         },
         "missing_in_cartera": missing_in_cartera,
+        "delivered_without_collection": delivered_without_collection,
         "paid_not_in_db": paid_not_in_db,
         "paid_not_delivered": paid_not_delivered,
         "amount_differences": amount_differences,

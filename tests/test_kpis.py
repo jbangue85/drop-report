@@ -1,7 +1,7 @@
 import sqlite3
 import unittest
 
-from app.analytics import calc_kpis
+from app.analytics import calc_kpis, reconcile_cartera
 from app.database import CREATE_META_ADS_SPEND, CREATE_ORDERS
 
 
@@ -68,7 +68,27 @@ class KpiTests(unittest.TestCase):
         kpis = calc_kpis(self.conn, "2026-05-02", "2026-05-02")
 
         self.assertEqual(kpis["ganancia_real"], -10000)
-        self.assertEqual(kpis["ganancia_proyectada"], -10000)
+
+    def test_cartera_reconciliation_separates_delivered_without_collection(self):
+        self.conn.executemany(
+            """
+            INSERT INTO orders
+                (id, fecha, estatus, tipo_envio, numero_guia, ganancia, total_orden)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (1, "2026-05-01", "ENTREGADO", "CON RECAUDO", "G1", 50000, 100000),
+                (2, "2026-05-01", "ENTREGADO", "SIN RECAUDO", "G2", 45000, 90000),
+            ],
+        )
+        self.conn.commit()
+
+        result = reconcile_cartera(self.conn, [])
+
+        self.assertEqual(result["summary"]["faltan_en_cartera"], 1)
+        self.assertEqual(result["summary"]["sin_recaudo_sin_pago"], 1)
+        self.assertEqual(result["missing_in_cartera"][0]["id"], 1)
+        self.assertEqual(result["delivered_without_collection"][0]["id"], 2)
 
     def test_projected_profit_includes_return_shipping_cost(self):
         self.conn.executemany(

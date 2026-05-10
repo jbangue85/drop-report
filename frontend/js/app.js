@@ -695,7 +695,8 @@ function renderCarteraReconciliation(result) {
     metric('Movimientos cartera', summary.cartera_movimientos, 'Ganancias con ORDEN ID'),
     metric('Entregadas DB', summary.ordenes_entregadas, 'Órdenes con estado ENTREGADO'),
     metric('Cruzadas', summary.cruzadas_entregadas, 'Pagadas y entregadas', 'kpi-green'),
-    metric('Faltan en cartera', summary.faltan_en_cartera, 'Entregadas sin pago', summary.faltan_en_cartera ? 'kpi-red' : 'kpi-green'),
+    metric('Faltan en cartera', summary.faltan_en_cartera, 'Entregadas con recaudo sin pago', summary.faltan_en_cartera ? 'kpi-red' : 'kpi-green'),
+    metric('Sin recaudo', summary.sin_recaudo_sin_pago, 'Entregadas no cobrables', 'kpi-green'),
     metric('Estado no entregado', summary.pagadas_no_entregadas, 'Pagadas en cartera', summary.pagadas_no_entregadas ? 'kpi-amber' : 'kpi-green'),
     metric('No existen', summary.pagadas_no_existen, 'No están en la base', summary.pagadas_no_existen ? 'kpi-red' : 'kpi-green'),
     metric('Diferencias', summary.diferencias_monto, 'Monto vs ganancia DB', summary.diferencias_monto ? 'kpi-amber' : 'kpi-green'),
@@ -704,6 +705,7 @@ function renderCarteraReconciliation(result) {
   summaryEl.classList.remove('hidden');
 
   renderCarteraMissing(result.missing_in_cartera || []);
+  renderCarteraNoCollection(result.delivered_without_collection || []);
   renderCarteraNotDelivered(result.paid_not_delivered || []);
   renderCarteraNotFound(result.paid_not_in_db || []);
   renderCarteraDiffs(result.amount_differences || []);
@@ -712,7 +714,25 @@ function renderCarteraReconciliation(result) {
 function renderCarteraMissing(rows) {
   const tbody = document.querySelector('#cartera-missing-table tbody');
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="5" class="empty-row">No hay entregadas pendientes por pago en este historial.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-row">No hay entregadas con recaudo pendientes por pago en este historial.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td><strong>${r.id}</strong></td>
+      <td>${formatIsoDate(r.fecha)}</td>
+      <td>${escapeHtml(r.numero_guia || '—')}</td>
+      <td title="${escapeHtml(r.producto || '')}">${escapeHtml(r.producto || '—')}</td>
+      <td>${escapeHtml(r.tipo_envio || '—')}</td>
+      <td>${CHARTS.formatCOP(r.ganancia || 0)}</td>
+    </tr>
+  `).join('');
+}
+
+function renderCarteraNoCollection(rows) {
+  const tbody = document.querySelector('#cartera-no-collection-table tbody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty-row">No hay entregadas sin recaudo fuera del historial.</td></tr>';
     return;
   }
   tbody.innerHTML = rows.map(r => `
