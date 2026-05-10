@@ -34,7 +34,7 @@ const API = (() => {
 
     const res = await fetch(BASE + path, opts);
 
-    if (res.status === 401) {
+    if (res.status === 401 && token && path !== '/api/auth/login') {
       clearToken();
       window.location.reload();
       throw new Error('Session expirada');
