@@ -3,7 +3,14 @@ import unittest
 
 import openpyxl
 
-from app.parser import InvalidDropiFileError, InvalidMetaFileError, parse_meta_csv, parse_xlsx
+from app.parser import (
+    InvalidCarteraFileError,
+    InvalidDropiFileError,
+    InvalidMetaFileError,
+    parse_cartera_xlsx,
+    parse_meta_csv,
+    parse_xlsx,
+)
 
 
 def build_xlsx(headers, rows):
@@ -111,6 +118,55 @@ class MetaParserValidationTests(unittest.TestCase):
 
         self.assertIn("Meta Ads", str(ctx.exception))
         self.assertIn("Inicio del informe", str(ctx.exception))
+
+
+class CarteraParserValidationTests(unittest.TestCase):
+    def test_accepts_cartera_history_profit_movements(self):
+        headers = [
+            "ID",
+            "FECHA",
+            "TIPO",
+            "MONTO",
+            "MONTO PREVIO",
+            "ORDEN ID",
+            "NUMERO DE GUIA",
+            "DESCRIPCIÓN",
+        ]
+        rows = [
+            [
+                198296498,
+                "10-05-2026 00:10",
+                "ENTRADA",
+                49342.5,
+                290611.7,
+                73885291,
+                "014158841780",
+                "ENTRADA POR GANANCIA EN LA ORDEN COMO DROPSHIPPER: 73885291* GUIA: *014158841780*",
+            ],
+            [
+                198689536,
+                "10-05-2026 17:18",
+                "ENTRADA",
+                505976.0,
+                9954.2,
+                None,
+                None,
+                "ENTRADA POR RETIRO DE TARJETA DE CREDITO",
+            ],
+        ]
+
+        records = parse_cartera_xlsx(build_xlsx(headers, rows), "historial.xlsx")
+
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]["orden_id"], 73885291)
+        self.assertEqual(records[0]["monto"], 49342.5)
+
+    def test_rejects_cartera_without_required_columns(self):
+        with self.assertRaises(InvalidCarteraFileError) as ctx:
+            parse_cartera_xlsx(build_xlsx(["ID", "FECHA"], [[1, "10-05-2026"]]), "wrong.xlsx")
+
+        self.assertIn("cartera", str(ctx.exception))
+        self.assertIn("ORDEN ID", str(ctx.exception))
 
 
 if __name__ == "__main__":

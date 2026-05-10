@@ -25,7 +25,7 @@ function startOfWeekMonday(date) {
 }
 
 const todayLocal = new Date();
-const VALID_TABS = new Set(['dashboard', 'calls', 'control', 'mappings', 'uploads', 'projection', 'users']);
+const VALID_TABS = new Set(['dashboard', 'calls', 'control', 'mappings', 'uploads', 'cartera', 'projection', 'users']);
 const TAB_TITLES = {
   dashboard: 'Dashboard',
   calls: 'Gestión Operativa',
@@ -33,6 +33,7 @@ const TAB_TITLES = {
   control: 'Control Diario',
   mappings: 'Asignación de Campañas',
   uploads: 'Historial de Cargas',
+  cartera: 'Conciliación de Cartera',
   projection: 'Supuestos de Proyección',
 };
 const FILTER_STORAGE_KEY = 'dr_filters';
@@ -591,6 +592,12 @@ setupUploadHandler('upload-dropi');
 setupUploadHandler('upload-meta');
 
 document.getElementById('upload-history-refresh')?.addEventListener('click', loadUploadHistory);
+document.getElementById('upload-cartera')?.addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  await reconcileCartera(file);
+  e.target.value = '';
+});
 
 async function doUpload(file) {
   const statusEl = document.getElementById('upload-status');
@@ -654,6 +661,118 @@ function formatUploadDate(value) {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+async function reconcileCartera(file) {
+  const statusEl = document.getElementById('cartera-status');
+  statusEl.className = 'upload-status';
+  statusEl.textContent = `Conciliando ${file.name}...`;
+  statusEl.classList.remove('hidden');
+
+  try {
+    const result = await API.reconcileCartera(file);
+    statusEl.className = 'upload-status';
+    statusEl.textContent = `✓ ${result.filename}: conciliación lista`;
+    renderCarteraReconciliation(result);
+  } catch (err) {
+    statusEl.className = 'upload-status error';
+    statusEl.textContent = `✗ Error: ${err.message}`;
+  }
+}
+
+function renderCarteraReconciliation(result) {
+  const summary = result.summary || {};
+  const summaryEl = document.getElementById('cartera-summary');
+  const metric = (label, value, sub, cls = '') => `
+    <div class="kpi-card ${cls}">
+      <div class="kpi-label">${label}</div>
+      <div class="kpi-value">${value ?? 0}</div>
+      <div class="kpi-sub">${sub}</div>
+    </div>
+  `;
+
+  summaryEl.innerHTML = [
+    metric('Movimientos cartera', summary.cartera_movimientos, 'Ganancias con ORDEN ID'),
+    metric('Entregadas DB', summary.ordenes_entregadas, 'Órdenes con estado ENTREGADO'),
+    metric('Cruzadas', summary.cruzadas_entregadas, 'Pagadas y entregadas', 'kpi-green'),
+    metric('Faltan en cartera', summary.faltan_en_cartera, 'Entregadas sin pago', summary.faltan_en_cartera ? 'kpi-red' : 'kpi-green'),
+    metric('Estado no entregado', summary.pagadas_no_entregadas, 'Pagadas en cartera', summary.pagadas_no_entregadas ? 'kpi-amber' : 'kpi-green'),
+    metric('No existen', summary.pagadas_no_existen, 'No están en la base', summary.pagadas_no_existen ? 'kpi-red' : 'kpi-green'),
+    metric('Diferencias', summary.diferencias_monto, 'Monto vs ganancia DB', summary.diferencias_monto ? 'kpi-amber' : 'kpi-green'),
+    metric('Duplicadas', summary.ordenes_duplicadas_en_cartera, 'ORDEN ID repetidos', summary.ordenes_duplicadas_en_cartera ? 'kpi-amber' : 'kpi-green'),
+  ].join('');
+  summaryEl.classList.remove('hidden');
+
+  renderCarteraMissing(result.missing_in_cartera || []);
+  renderCarteraNotDelivered(result.paid_not_delivered || []);
+  renderCarteraNotFound(result.paid_not_in_db || []);
+  renderCarteraDiffs(result.amount_differences || []);
+}
+
+function renderCarteraMissing(rows) {
+  const tbody = document.querySelector('#cartera-missing-table tbody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty-row">No hay entregadas pendientes por pago en este historial.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td><strong>${r.id}</strong></td>
+      <td>${formatIsoDate(r.fecha)}</td>
+      <td>${escapeHtml(r.numero_guia || '—')}</td>
+      <td title="${escapeHtml(r.producto || '')}">${escapeHtml(r.producto || '—')}</td>
+      <td>${CHARTS.formatCOP(r.ganancia || 0)}</td>
+    </tr>
+  `).join('');
+}
+
+function renderCarteraNotDelivered(rows) {
+  const tbody = document.querySelector('#cartera-not-delivered-table tbody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="empty-row">No hay pagos con estado distinto a ENTREGADO.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td><strong>${r.orden_id}</strong></td>
+      <td>${escapeHtml(String(r.fecha || '—'))}</td>
+      <td>${CHARTS.formatCOP(r.monto || 0)}</td>
+      <td><span class="chip chip-amber">${escapeHtml(r.db_estatus || '—')}</span></td>
+      <td>${escapeHtml(r.numero_guia || r.db_numero_guia || '—')}</td>
+    </tr>
+  `).join('');
+}
+
+function renderCarteraNotFound(rows) {
+  const tbody = document.querySelector('#cartera-not-found-table tbody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="empty-row">Todos los pagos del historial existen en la base.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td><strong>${r.orden_id}</strong></td>
+      <td>${escapeHtml(String(r.fecha || '—'))}</td>
+      <td>${CHARTS.formatCOP(r.monto || 0)}</td>
+      <td>${escapeHtml(r.numero_guia || '—')}</td>
+    </tr>
+  `).join('');
+}
+
+function renderCarteraDiffs(rows) {
+  const tbody = document.querySelector('#cartera-diff-table tbody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="empty-row">No hay diferencias de monto.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td><strong>${r.orden_id}</strong></td>
+      <td>${CHARTS.formatCOP(r.monto || 0)}</td>
+      <td>${CHARTS.formatCOP(r.db_ganancia || 0)}</td>
+      <td style="color:${r.diferencia_monto >= 0 ? 'var(--green)' : 'var(--red)'}">${CHARTS.formatCOP(r.diferencia_monto || 0)}</td>
+    </tr>
+  `).join('');
 }
 
 
@@ -882,6 +1001,15 @@ function formatIsoDate(iso) {
 function formatDatetime(dt) {
   if (!dt) return '—';
   return dt.replace('T', ' ').substring(0, 16);
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 async function copyToClipboard(text, successMessage = 'Copiado al portapapeles.') {

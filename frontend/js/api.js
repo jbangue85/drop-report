@@ -105,6 +105,12 @@ const API = (() => {
     listUploads: () =>
       request('GET', '/api/uploads'),
 
+    reconcileCartera: (file) => {
+      const fd = new FormData();
+      fd.append('file', file);
+      return request('POST', '/api/cartera/reconcile', fd, true);
+    },
+
     // Calls
     getPendingCalls: (params = {}) =>
       request('GET', '/api/calls/pending' + toQuery(params)),

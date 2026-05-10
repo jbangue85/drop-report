@@ -21,6 +21,7 @@ from .analytics import (
     get_projection_configs,
     get_action_orders,
     get_filter_options,
+    reconcile_cartera,
     _app_now,
     _business_hours_elapsed,
 )
@@ -157,6 +158,38 @@ def list_uploads(user=Depends(get_current_user)):
     ).fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+@app.post("/api/cartera/reconcile")
+async def reconcile_cartera_file(
+    file: UploadFile = File(...),
+    user=Depends(get_current_user),
+):
+    if not file.filename.lower().endswith(".xlsx"):
+        raise HTTPException(status_code=400, detail="Solo se aceptan archivos .xlsx de cartera")
+
+    content = await file.read()
+    from app.parser import InvalidCarteraFileError, parse_cartera_xlsx
+
+    try:
+        records = parse_cartera_xlsx(content, file.filename)
+    except InvalidCarteraFileError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
+
+    if not records:
+        raise HTTPException(
+            status_code=422,
+            detail="El archivo no contiene movimientos de ganancia con ORDEN ID",
+        )
+
+    conn = get_db()
+    result = reconcile_cartera(conn, records)
+    conn.close()
+
+    return {
+        "filename": file.filename,
+        **result,
+    }
 
 
 # ── Dashboard routes ──────────────────────────────────────────────────────────

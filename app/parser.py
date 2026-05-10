@@ -85,6 +85,10 @@ class InvalidMetaFileError(ValueError):
     pass
 
 
+class InvalidCarteraFileError(ValueError):
+    pass
+
+
 def _normalize_header(value) -> str:
     return str(value or "").strip()
 
@@ -118,6 +122,25 @@ def _validate_meta_headers(headers) -> str:
             "Faltan columnas obligatorias: " + ", ".join(missing)
         )
     return spend_cols[0]
+
+
+def _validate_cartera_headers(headers) -> None:
+    present = {_normalize_header(h) for h in headers if _normalize_header(h)}
+    required = {
+        "ID",
+        "FECHA",
+        "TIPO",
+        "MONTO",
+        "ORDEN ID",
+        "NUMERO DE GUIA",
+        "DESCRIPCIÓN",
+    }
+    missing = sorted(required - present)
+    if missing:
+        raise InvalidCarteraFileError(
+            "El archivo de cartera no tiene la estructura esperada. "
+            "Faltan columnas obligatorias: " + ", ".join(missing)
+        )
 
 
 def _normalize_date(value) -> "Optional[str]":
@@ -172,6 +195,67 @@ def parse_xlsx(file_bytes: bytes, filename: str) -> List[Dict[str, Any]]:
         # Must have an id to upsert
         if rec.get("id") is not None:
             records.append(rec)
+
+    return records
+
+
+def _as_int(value):
+    if value is None or value == "":
+        return None
+    try:
+        return int(float(str(value).strip()))
+    except (TypeError, ValueError):
+        return None
+
+
+def _as_float(value):
+    if value is None or value == "":
+        return None
+    try:
+        return float(str(value).replace(",", "").strip())
+    except (TypeError, ValueError):
+        return None
+
+
+def parse_cartera_xlsx(file_bytes: bytes, filename: str) -> List[Dict[str, Any]]:
+    """Parse Dropi cartera history rows that represent order profit movements."""
+    import io
+    wb = openpyxl.load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
+    ws = wb.active
+    rows = list(ws.iter_rows(values_only=True))
+    wb.close()
+
+    if not rows:
+        return []
+
+    raw_headers = rows[0]
+    _validate_cartera_headers(raw_headers)
+    headers = [_normalize_header(h) for h in raw_headers]
+    col_index = {header: i for i, header in enumerate(headers) if header}
+
+    records = []
+    for row in rows[1:]:
+        if not any(row):
+            continue
+
+        descripcion = str(row[col_index["DESCRIPCIÓN"]] or "")
+        orden_id = _as_int(row[col_index["ORDEN ID"]])
+
+        if not orden_id:
+            continue
+        if "GANANCIA EN LA ORDEN" not in descripcion.upper():
+            continue
+
+        records.append({
+            "historial_id": _as_int(row[col_index["ID"]]),
+            "fecha": row[col_index["FECHA"]],
+            "tipo": row[col_index["TIPO"]],
+            "monto": _as_float(row[col_index["MONTO"]]),
+            "orden_id": orden_id,
+            "numero_guia": str(row[col_index["NUMERO DE GUIA"]] or "").strip(),
+            "descripcion": descripcion,
+            "source_file": filename,
+        })
 
     return records
 

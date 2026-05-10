@@ -621,6 +621,110 @@ def get_action_orders(conn, date_from=None, date_to=None, reference_now: Optiona
     return [dict(r) for r in rows]
 
 
+def reconcile_cartera(conn: sqlite3.Connection, cartera_records: list[dict]) -> dict:
+    cartera_by_order = {}
+    duplicate_order_ids = set()
+    for record in cartera_records:
+        order_id = record.get("orden_id")
+        if not order_id:
+            continue
+        if order_id in cartera_by_order:
+            duplicate_order_ids.add(order_id)
+        cartera_by_order[order_id] = record
+
+    paid_order_ids = set(cartera_by_order)
+    orders = {
+        row["id"]: dict(row)
+        for row in conn.execute(
+            """
+            SELECT
+                id, fecha, estatus, numero_guia, nombre_cliente, producto,
+                total_orden, ganancia
+            FROM orders
+            """
+        ).fetchall()
+    }
+
+    delivered_rows = [
+        dict(row)
+        for row in conn.execute(
+            """
+            SELECT
+                id, fecha, estatus, numero_guia, nombre_cliente, producto,
+                total_orden, ganancia
+            FROM orders
+            WHERE estatus = 'ENTREGADO'
+            ORDER BY fecha DESC, id DESC
+            """
+        ).fetchall()
+    ]
+
+    missing_in_cartera = [
+        {
+            **row,
+            "diferencia_monto": None,
+        }
+        for row in delivered_rows
+        if row["id"] not in paid_order_ids
+    ]
+
+    paid_not_in_db = [
+        record
+        for record in cartera_records
+        if record["orden_id"] not in orders
+    ]
+
+    paid_not_delivered = []
+    amount_differences = []
+    matched = 0
+
+    for record in cartera_records:
+        order = orders.get(record["orden_id"])
+        if not order:
+            continue
+        if order["estatus"] != "ENTREGADO":
+            paid_not_delivered.append({
+                **record,
+                "db_estatus": order["estatus"],
+                "db_fecha": order["fecha"],
+                "db_numero_guia": order["numero_guia"],
+                "db_producto": order["producto"],
+            })
+            continue
+
+        matched += 1
+        if record.get("monto") is None or order.get("ganancia") is None:
+            continue
+        diff = round(float(record["monto"]) - float(order["ganancia"]), 2)
+        if abs(diff) > 0.01:
+            amount_differences.append({
+                **record,
+                "db_ganancia": order["ganancia"],
+                "diferencia_monto": diff,
+                "db_fecha": order["fecha"],
+                "db_numero_guia": order["numero_guia"],
+                "db_producto": order["producto"],
+            })
+
+    return {
+        "summary": {
+            "cartera_movimientos": len(cartera_records),
+            "ordenes_entregadas": len(delivered_rows),
+            "cruzadas_entregadas": matched,
+            "faltan_en_cartera": len(missing_in_cartera),
+            "pagadas_no_existen": len(paid_not_in_db),
+            "pagadas_no_entregadas": len(paid_not_delivered),
+            "diferencias_monto": len(amount_differences),
+            "ordenes_duplicadas_en_cartera": len(duplicate_order_ids),
+        },
+        "missing_in_cartera": missing_in_cartera,
+        "paid_not_in_db": paid_not_in_db,
+        "paid_not_delivered": paid_not_delivered,
+        "amount_differences": amount_differences,
+        "duplicate_order_ids": sorted(duplicate_order_ids),
+    }
+
+
 def get_filter_options(conn) -> dict:
     estatus_rows = conn.execute("SELECT DISTINCT estatus FROM orders WHERE estatus IS NOT NULL ORDER BY estatus").fetchall()
     date_row = conn.execute("SELECT MIN(fecha) AS min_date, MAX(fecha) AS max_date FROM orders").fetchone()

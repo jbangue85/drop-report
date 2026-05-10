@@ -68,6 +68,10 @@
         <span class="nav-icon">📤</span>
         <span>Cargas</span>
       </a>
+      <a href="#" class="nav-item" data-tab="cartera" id="nav-cartera">
+        <span class="nav-icon">💵</span>
+        <span>Cartera</span>
+      </a>
       <a href="#" class="nav-item hidden" data-tab="projection" id="nav-projection">
         <span class="nav-icon">🧮</span>
         <span>Supuestos</span>
@@ -288,6 +292,100 @@
       </div>
     </section>
 
+    <!-- ══════════════ CARTERA TAB ══════════════ -->
+    <section id="tab-cartera" class="tab-content hidden">
+      <div class="calls-header">
+        <div>
+          <h3>Conciliación de Cartera</h3>
+          <p class="calls-sub">Sube el historial de cartera de Dropi para cruzar ganancias pagadas contra las órdenes entregadas en la base actual.</p>
+        </div>
+        <label for="upload-cartera" class="btn btn-primary btn-sm">
+          <span class="nav-icon">💵</span> Subir historial
+        </label>
+        <input type="file" id="upload-cartera" accept=".xlsx" class="hidden" />
+      </div>
+
+      <div id="cartera-status" class="upload-status hidden"></div>
+
+      <div id="cartera-summary" class="kpi-grid cartera-summary hidden"></div>
+
+      <div class="charts-grid cartera-grid">
+        <div class="chart-card table-wrap">
+          <div class="chart-header">
+            <h3>Entregadas sin pago en cartera</h3>
+            <span class="chart-sub">Órdenes ENTREGADO que no aparecen en el historial subido</span>
+          </div>
+          <table class="data-table" id="cartera-missing-table">
+            <thead>
+              <tr>
+                <th>Orden</th>
+                <th>Fecha</th>
+                <th>Guía</th>
+                <th>Producto</th>
+                <th>Ganancia</th>
+              </tr>
+            </thead>
+            <tbody><tr><td colspan="5" class="empty-row">Sube un historial para conciliar.</td></tr></tbody>
+          </table>
+        </div>
+
+        <div class="chart-card table-wrap">
+          <div class="chart-header">
+            <h3>Pagadas sin entregar en DB</h3>
+            <span class="chart-sub">Movimientos de cartera cuyo estado local no es ENTREGADO</span>
+          </div>
+          <table class="data-table" id="cartera-not-delivered-table">
+            <thead>
+              <tr>
+                <th>Orden</th>
+                <th>Fecha cartera</th>
+                <th>Monto</th>
+                <th>Estado DB</th>
+                <th>Guía</th>
+              </tr>
+            </thead>
+            <tbody><tr><td colspan="5" class="empty-row">Sube un historial para conciliar.</td></tr></tbody>
+          </table>
+        </div>
+
+        <div class="chart-card table-wrap">
+          <div class="chart-header">
+            <h3>Pagadas que no existen</h3>
+            <span class="chart-sub">ORDEN ID del historial que no está en la base</span>
+          </div>
+          <table class="data-table" id="cartera-not-found-table">
+            <thead>
+              <tr>
+                <th>Orden</th>
+                <th>Fecha cartera</th>
+                <th>Monto</th>
+                <th>Guía</th>
+              </tr>
+            </thead>
+            <tbody><tr><td colspan="4" class="empty-row">Sube un historial para conciliar.</td></tr></tbody>
+          </table>
+        </div>
+
+        <div class="chart-card table-wrap">
+          <div class="chart-header">
+            <h3>Diferencias de monto</h3>
+            <span class="chart-sub">Monto cartera contra ganancia guardada en órdenes</span>
+          </div>
+          <table class="data-table" id="cartera-diff-table">
+            <thead>
+              <tr>
+                <th>Orden</th>
+                <th>Monto cartera</th>
+                <th>Ganancia DB</th>
+                <th>Diferencia</th>
+              </tr>
+            </thead>
+            <tbody><tr><td colspan="4" class="empty-row">Sube un historial para conciliar.</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
     <!-- ══════════════ CONTROL DIARIO TAB ══════════════ -->
     <section id="tab-control" class="tab-content hidden">
       <div class="calls-header">
@@ -480,8 +578,8 @@
   </div>
 </div>
 
-  <script src="/js/api.js?v=15"></script>
+  <script src="/js/api.js?v=16"></script>
   <script src="/js/charts.js?v=10"></script>
-  <script src="/js/app.js?v=15"></script>
+  <script src="/js/app.js?v=16"></script>
 </body>
 </html>
